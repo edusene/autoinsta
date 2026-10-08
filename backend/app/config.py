@@ -1,9 +1,15 @@
-"""Configuração lida exclusivamente de variáveis de ambiente."""
+"""Configuração lida exclusivamente de variáveis de ambiente.
+
+Localmente, os valores vêm do arquivo .env na RAIZ do projeto (único para tudo).
+Em produção (Render/VPS), vêm das variáveis de ambiente do serviço.
+"""
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+ROOT_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(ROOT_DIR / ".env")
 
 
 def _bool(name: str, default: bool = False) -> bool:
@@ -32,6 +38,11 @@ class Config:
     # Supabase Auth (validação do JWT do usuário)
     SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
     SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")  # apenas projetos com segredo HS256 legado
+    # Chave PÚBLICA (publishable/anon), entregue ao painel em /api/public-config
+    SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+
+    # Painel compilado (frontend/dist), servido pelo próprio Flask
+    FRONTEND_DIST = os.getenv("FRONTEND_DIST", str(ROOT_DIR / "frontend" / "dist"))
 
     # Meta / Instagram API with Instagram Login
     META_APP_ID = os.getenv("META_APP_ID", "")  # "Instagram App ID" do painel
@@ -67,6 +78,7 @@ class TestConfig(Config):
     DATABASE_URL = os.getenv("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:54329/autoinsta_test")
     SUPABASE_URL = "https://test.supabase.co"
     SUPABASE_JWT_SECRET = "test-jwt-secret-with-at-least-32-bytes!!"
+    SUPABASE_ANON_KEY = "sb_publishable_test"
     META_APP_ID = "123"
     META_APP_SECRET = "meta-test-secret"
     META_REDIRECT_URI = "http://localhost:5173/instagram/callback"

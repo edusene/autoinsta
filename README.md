@@ -11,7 +11,7 @@ Usa **somente APIs oficiais** (Instagram API with Instagram Login, Graph API v25
 | Backend | Python 3.12+ · Flask · psycopg 3 (SQL parametrizado) · pydantic |
 | Banco / Auth | Supabase (PostgreSQL + Supabase Auth) |
 | Fila | Tabela `jobs` no Postgres + `worker.py` (sem Redis) |
-| Frontend | React · Vite · TypeScript · React Flow (`@xyflow/react`) |
+| Frontend | React · Vite · TypeScript · React Flow (`@xyflow/react`), servido pelo próprio Flask |
 | Integrações | Meta Graph API (Instagram Login, webhooks) · OpenAI Responses API |
 
 ```
@@ -51,7 +51,7 @@ docs/         análise técnica e arquitetura
 ## 2. Banco (Supabase)
 
 1. Crie o projeto. Em **Connect**, copie a connection string. Em servidores sem IPv6, use o **Session pooler** (porta 5432).
-2. Configure `backend/.env` (passo 4) e aplique as migrations:
+2. Configure o `.env` da raiz (passo 4) e aplique as migrations:
    ```bash
    cd backend
    python migrate.py            # aplica database/migrations/*.sql
@@ -78,52 +78,45 @@ Ao conectar, a plataforma assina automaticamente os webhooks da conta (`POST /me
 
 > **Assinatura do webhook:** a validação usa `META_APP_SECRET`. Se o painel do seu app assinar com outro segredo (por exemplo, o App Secret do app Meta em *Configurações → Básico*), adicione-o em `META_WEBHOOK_EXTRA_SECRETS`.
 
-## 4. Configuração
+## 4. Configuração (um único `.env`)
+
+Toda a configuração fica em **um arquivo `.env` na raiz** do projeto. Ele é ignorado pelo Git; o modelo versionado é o `.env.example`.
 
 ```bash
-cp backend/.env.example backend/.env       # preencha
-cp frontend/.env.example frontend/.env     # VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
+cp .env.example .env     # preencha os valores
 ```
 
-| Variável | Onde | Descrição |
-|---|---|---|
-| `SECRET_KEY` | backend | Assina o `state` do OAuth. Use 32+ caracteres aleatórios. |
-| `DATABASE_URL` | backend | Postgres do Supabase. |
-| `SUPABASE_URL` | backend | Valida os JWTs (JWKS). |
-| `SUPABASE_JWT_SECRET` | backend | Só para projetos com segredo HS256 legado. |
-| `META_APP_ID` / `META_APP_SECRET` | backend | Credenciais do Instagram Login. |
-| `META_REDIRECT_URI` | backend | URL do frontend `/instagram/callback` (idêntica à do painel). |
-| `META_VERIFY_TOKEN` | backend | Token de verificação do webhook. |
-| `TOKEN_ENCRYPTION_KEY` | backend | Chave Fernet para criptografar os tokens no banco. |
-| `OPENAI_API_KEY` / `OPENAI_DEFAULT_MODEL` | backend | IA. A chave nunca vai para o frontend. |
-| `FRONTEND_URL` / `CORS_ORIGINS` | backend | Origem do painel. |
-| `VITE_API_URL` | frontend | URL da API. Vazio = mesma origem. |
-| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | frontend | Chave **pública** do Supabase. |
+O painel não tem variáveis próprias. A API e o painel ficam no mesmo endereço, e o painel busca a URL e a chave **pública** do Supabase em `GET /api/public-config` quando abre.
 
-Para gerar os segredos:
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"                                   # SECRET_KEY
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"     # TOKEN_ENCRYPTION_KEY
-```
+| Variável | Descrição |
+|---|---|
+| `SECRET_KEY` | Assina o `state` do OAuth. Use 32+ caracteres aleatórios. |
+| `FRONTEND_URL` / `CORS_ORIGINS` | Endereço público do serviço (API e painel juntos). |
+| `DATABASE_URL` | Postgres do Supabase (pooler). |
+| `SUPABASE_URL` / `SUPABASE_ANON_KEY` | URL do projeto e chave **pública** (publishable/anon). Nunca a `service_role`. |
+| `META_APP_ID` / `META_APP_SECRET` | "ID" e "Chave secreta" **do app do Instagram**. |
+| `META_REDIRECT_URI` | `<endereço>/instagram/callback`, idêntica à do painel da Meta. |
+| `META_VERIFY_TOKEN` | Token de verificação do webhook (você cola no painel da Meta). |
+| `TOKEN_ENCRYPTION_KEY` | Chave Fernet dos tokens no banco. Não troque depois de conectar contas. |
+| `OPENAI_API_KEY` / `OPENAI_DEFAULT_MODEL` | IA. A chave nunca vai para o navegador. |
+| `EMBEDDED_WORKER` | `true` roda o worker dentro da API (Render free); `false` exige `python worker.py`. |
 
 ## 5. Execução local
 
 ```bash
-# Backend
+# API (lê o .env da raiz)
 cd backend
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
 python migrate.py
-python run.py          # API em http://localhost:5000
-python worker.py       # em outro terminal: processa webhooks, delays e renovação de tokens
+python run.py          # http://localhost:5000
+python worker.py       # outro terminal (ou EMBEDDED_WORKER=true)
 
-# Frontend
-cd frontend
-npm install
-npm run dev            # http://localhost:5173 (proxy de /api para o Flask)
+# Painel com hot reload (proxy de /api para o Flask)
+cd frontend && npm install && npm run dev      # http://localhost:5173
 ```
 
-Para receber webhooks localmente, exponha a API com um túnel HTTPS (`ngrok http 5000`) e use essa URL no painel da Meta.
+Para usar o mesmo endereço do deploy localmente, rode `npm run build` em `frontend/`: o Flask passa a servir o painel em http://localhost:5000.
 
 ## 6. Testes
 
@@ -140,33 +133,26 @@ Frontend: `npm run build` (type-check + build).
 
 ## 7. Deploy
 
-### Render (ambiente de teste, plano free)
+Uma única imagem Docker (`Dockerfile` na raiz) compila o painel e roda a API, que serve os dois. As migrations são aplicadas automaticamente a cada inicialização.
 
-1. Suba o repositório para o GitHub e, no Render, use **New → Blueprint** (lê o `render.yaml`).
-2. As variáveis podem ficar vazias na criação. Depois, em cada serviço, vá em **Environment → Add from .env** e cole:
-   - `autoinsta-api`: o conteúdo de `backend/.env.render`
-   - `autoinsta-web`: o conteúdo de `frontend/.env.render` (variáveis `VITE_*` entram no build, então faça um novo deploy depois de alterar)
+### Render (Web Service)
 
-   Esses arquivos são ignorados pelo Git (`.env.*`) e nunca devem ser versionados.
-3. No plano free não existe background worker: `EMBEDDED_WORKER=true` roda o worker dentro da API. O serviço hiberna após 15 min sem tráfego (cerca de 1 min para acordar); a Meta reenvia webhooks não confirmados.
-4. Supabase: use a connection string do **Session pooler** (o Render só tem IPv4).
+1. **New → Web Service**, conecte o repositório do GitHub.
+2. **Language / Runtime: Docker**. Dockerfile Path: `./Dockerfile` (padrão). Root Directory: em branco.
+3. **Region:** Virginia (mesma região do Supabase). **Instance type:** Free.
+4. **Environment → Add from .env:** cole o conteúdo do seu `.env`. Ajuste `FRONTEND_URL`, `CORS_ORIGINS` e `META_REDIRECT_URI` para a URL que o Render gerar.
+5. **Advanced → Health Check Path:** `/health`.
 
-### Linux / Docker
+No plano free não há background worker: `EMBEDDED_WORKER=true` roda o worker dentro da API. O serviço hiberna após 15 min sem tráfego (cerca de 1 min para acordar); a Meta reenvia webhooks não confirmados.
 
-A API e o worker usam a mesma imagem:
+### VPS
 
 ```bash
-docker compose up -d --build      # lê backend/.env; API na porta 5000
+cp .env.example .env      # ou copie o seu .env
+docker compose up -d --build     # app (API + painel) na porta 5000 + worker separado
 ```
 
-Ou sem Docker: `gunicorn -c gunicorn.conf.py wsgi:app` e `python worker.py` como serviços (systemd ou supervisor).
-
-- **Frontend:** `cd frontend && npm run build` gera `dist/`, um site estático. Configure o fallback de SPA para `index.html`. Sirva pela mesma origem da API via reverse proxy (`/api` e `/webhooks` → Flask) ou defina `VITE_API_URL` no build.
-- **HTTPS obrigatório** (a Meta exige). Termine TLS no proxy; o Flask usa `ProxyFix`.
-- Em produção: `APP_ENV=production`, segredos no gerenciador de secrets do provedor (nunca no Git), `CORS_ORIGINS` só com o domínio do painel.
-- Com várias instâncias da API, defina `RATELIMIT_STORAGE_URI` para um storage compartilhado.
-- Rode `python migrate.py` a cada deploy que trouxer migrations novas.
-- Escala: é possível rodar vários workers, porque os jobs são reservados com `FOR UPDATE SKIP LOCKED`.
+Coloque um proxy com HTTPS (Caddy ou Nginx) na frente da porta 5000; a Meta exige HTTPS. Mantenha a mesma `TOKEN_ENCRYPTION_KEY` ao migrar, e atualize as URLs no painel da Meta e no Supabase Auth.
 
 ## API (resumo)
 

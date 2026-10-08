@@ -1,15 +1,12 @@
-# Execução em servidor Linux: API + worker (o banco é o Postgres do Supabase).
+# Execução em VPS: app (API + painel) + worker separado. Banco = Supabase.
 #   docker compose up -d --build
-# O frontend é um site estático (frontend/dist) — publique em CDN/hosting estático
-# ou atrás do mesmo reverse proxy (ver README > Deploy).
+# Coloque um proxy com HTTPS (Caddy/Nginx) na frente da porta 5000.
 services:
-  api:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    env_file: backend/.env
+  app:
+    build: .
+    env_file: .env
     environment:
-      APP_ENV: production
+      EMBEDDED_WORKER: "false"   # na VPS o worker roda no serviço abaixo
     ports:
       - "5000:5000"
     restart: unless-stopped
@@ -20,13 +17,11 @@ services:
       retries: 3
 
   worker:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    env_file: backend/.env
+    build: .
+    env_file: .env
     environment:
-      APP_ENV: production
+      EMBEDDED_WORKER: "false"
     command: ["python", "worker.py"]
     restart: unless-stopped
     depends_on:
-      - api
+      - app

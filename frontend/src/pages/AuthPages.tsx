@@ -30,7 +30,7 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
           </div>
           {!supabaseConfigured && (
             <div className="alert alert-warning">
-              Supabase não configurado: defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no arquivo .env do frontend.
+              Supabase não configurado no servidor: defina SUPABASE_URL e SUPABASE_ANON_KEY no .env.
             </div>
           )}
           {children}

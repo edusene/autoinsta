@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 
-// Vazio = mesma origem (o Vite faz proxy de /api em desenvolvimento).
-export const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '')
+// API e painel ficam no mesmo endereço (em dev, o Vite faz proxy de /api para o Flask).
+export const API_URL = ''
 
 export class ApiError extends Error {
   code: string

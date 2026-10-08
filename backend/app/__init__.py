@@ -41,7 +41,7 @@ def _check_config(app: Flask) -> None:
 
 
 def create_app(config_class: type = Config, init_db: bool = True) -> Flask:
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder=None)  # estáticos do painel: routes/frontend.py
     app.config.from_object(config_class)
     app.json = JSONProvider(app)
     app.json.ensure_ascii = False
@@ -60,9 +60,10 @@ def create_app(config_class: type = Config, init_db: bool = True) -> Flask:
     if init_db:
         db.init_pool(app.config["DATABASE_URL"], app.config["DB_POOL_MAX_SIZE"])
 
-    from app.routes import auth, health, instagram, panel, webhooks, workflows
+    from app.routes import auth, frontend, health, instagram, panel, webhooks, workflows
 
-    for module in (auth, health, instagram, panel, webhooks, workflows):
+    # frontend por último: sua rota "catch-all" atende só o que as outras não atendem
+    for module in (auth, health, instagram, panel, webhooks, workflows, frontend):
         app.register_blueprint(module.bp)
 
     register_error_handlers(app)
