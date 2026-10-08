@@ -4,10 +4,17 @@ import { ErrorAlert, Loading } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { api, API_URL, errorMessage } from '../lib/api'
+import { setTheme, useTheme, type Theme } from '../lib/theme'
 import type { Settings } from '../types'
+
+const THEME_OPTIONS: [Theme, string][] = [
+  ['light', '☀ Claro'],
+  ['dark', '☾ Escuro'],
+]
 
 export function SettingsPage() {
   const { session, signOut } = useAuth()
+  const theme = useTheme()
   const { data, error, loading, reload, setData } = useApi<Settings>('/api/settings')
   const [model, setModel] = useState('')
   const [saving, setSaving] = useState(false)
@@ -53,6 +60,25 @@ export function SettingsPage() {
           </div>
           <span className="spacer" />
           <button className="btn" onClick={signOut}>Sair</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header"><h2>Aparência</h2></div>
+        <div className="card-body row">
+          <div>
+            <div style={{ fontWeight: 550 }}>Tema</div>
+            <div className="small muted">Salvo neste navegador.</div>
+          </div>
+          <span className="spacer" />
+          <div className="segmented" role="radiogroup" aria-label="Tema">
+            {THEME_OPTIONS.map(([value, label]) => (
+              <button key={value} role="radio" aria-checked={theme === value}
+                className={theme === value ? 'active' : ''} onClick={() => setTheme(value)}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

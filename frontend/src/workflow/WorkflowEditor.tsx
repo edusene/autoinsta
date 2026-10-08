@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ErrorAlert, Loading, WorkflowStatusBadge } from '../components/ui'
 import { api, ApiError, errorMessage } from '../lib/api'
+import { useTheme } from '../lib/theme'
 import type { Graph, NodeTypeDef, ValidationResult, Workflow } from '../types'
 import { CATEGORY_META, CatalogContext, defaultConfig, type FlowNode } from './catalog'
 import { FlowNodeView } from './FlowNodeView'
@@ -67,6 +68,7 @@ function Editor({ workflow, catalog }: { workflow: Workflow; catalog: NodeTypeDe
   const [busy, setBusy] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition } = useReactFlow()
+  const theme = useTheme()
 
   const graph = useMemo(() => toGraph(nodes, edges), [nodes, edges])
   const dirty = JSON.stringify({ name, graph }) !== savedSnapshot
@@ -225,6 +227,7 @@ function Editor({ workflow, catalog }: { workflow: Workflow; catalog: NodeTypeDe
               fitView
               fitViewOptions={{ maxZoom: 1 }}
               proOptions={{ hideAttribution: true }}
+              colorMode={theme}
             >
               <Background gap={20} />
               <Controls />
