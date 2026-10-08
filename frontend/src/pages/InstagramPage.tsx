@@ -4,6 +4,7 @@ import { ConfirmButton, ErrorAlert, Loading } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { api, errorMessage } from '../lib/api'
 import { formatDateTime, timeAgo } from '../lib/format'
+import { metaRedirectUri } from '../lib/supabase'
 import type { DiagnosticCheck, InstagramStatus } from '../types'
 
 const CHECK_ICON = { ok: '✓', warning: '!', error: '✕' }
@@ -111,6 +112,7 @@ export function InstagramPage() {
   const viaServerToken = account?.connection_method === 'server_token'
   const reconnect = viaServerToken && options.server_token ? connectWithServerToken : connect
   const canReconnect = viaServerToken ? options.server_token : options.oauth
+  const expectedRedirect = `${window.location.origin}/instagram/callback`
 
   return (
     <div className="page stack" style={{ maxWidth: 860 }}>
@@ -174,6 +176,12 @@ export function InstagramPage() {
                 </button>
               )}
             </div>
+            {options.oauth && metaRedirectUri && metaRedirectUri !== expectedRedirect && (
+              <div className="alert alert-warning">
+                O servidor está configurado com <code>META_REDIRECT_URI={metaRedirectUri}</code>, mas este site é{' '}
+                <code>{expectedRedirect}</code>. Corrija a variável no servidor (Render → Environment) para o login funcionar.
+              </div>
+            )}
             {!options.oauth && !options.server_token && (
               <div className="alert alert-warning">
                 A conexão com o Instagram ainda não foi configurada pelo administrador da plataforma.

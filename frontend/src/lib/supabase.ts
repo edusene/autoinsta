@@ -5,6 +5,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 export let supabase: SupabaseClient
 export let supabaseConfigured = false
 export let privacyContactEmail = ''
+export let metaRedirectUri = ''
 
 export async function initSupabase(): Promise<void> {
   let url = ''
@@ -15,6 +16,7 @@ export async function initSupabase(): Promise<void> {
     url = json?.data?.supabase_url ?? ''
     key = json?.data?.supabase_anon_key ?? ''
     privacyContactEmail = json?.data?.privacy_contact_email ?? ''
+    metaRedirectUri = json?.data?.meta_redirect_uri ?? ''
   } catch {
     // API indisponível: o login mostra o aviso de configuração
   }

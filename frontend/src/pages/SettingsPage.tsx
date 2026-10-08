@@ -4,6 +4,7 @@ import { ErrorAlert, Loading } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { api, API_URL, errorMessage } from '../lib/api'
+import { metaRedirectUri } from '../lib/supabase'
 import { setTheme, useTheme, type Theme } from '../lib/theme'
 import type { Settings } from '../types'
 
@@ -150,7 +151,13 @@ export function SettingsPage() {
         <div className="card-body stack small">
           <div><span className="muted">API:</span> <code>{apiBase}</code></div>
           <div><span className="muted">URL de callback do webhook (painel da Meta):</span> <code>{apiBase}/webhooks/meta</code></div>
-          <div><span className="muted">URL de redirecionamento OAuth:</span> <code>{window.location.origin}/instagram/callback</code></div>
+          <div><span className="muted">URL de redirecionamento OAuth (cadastre na Meta):</span> <code>{window.location.origin}/instagram/callback</code></div>
+          <div>
+            <span className="muted">META_REDIRECT_URI no servidor:</span> <code>{metaRedirectUri || '(vazio)'}</code>{' '}
+            {metaRedirectUri === `${window.location.origin}/instagram/callback`
+              ? <span style={{ color: 'var(--success)' }}>✓ confere</span>
+              : <span style={{ color: 'var(--danger)' }}>✕ diferente — corrija no servidor</span>}
+          </div>
           <div className="muted">Essas URLs são configuradas uma única vez pelo administrador no Meta App (veja o README).</div>
         </div>
       </div>

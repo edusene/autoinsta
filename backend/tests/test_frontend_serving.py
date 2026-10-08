@@ -16,7 +16,8 @@ def dist(app, tmp_path):
 def test_public_config_exposes_only_public_values(client):
     data = client.get("/api/public-config").get_json()["data"]
     assert data == {"supabase_url": "https://test.supabase.co", "supabase_anon_key": "sb_publishable_test",
-                    "privacy_contact_email": "privacidade@example.com"}
+                    "privacy_contact_email": "privacidade@example.com",
+                    "meta_redirect_uri": "http://localhost:5173/instagram/callback"}
 
 
 def test_serves_index_and_spa_routes(client, dist):

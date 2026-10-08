@@ -26,6 +26,8 @@ def public_config():
         "supabase_url": cfg["SUPABASE_URL"],
         "supabase_anon_key": cfg["SUPABASE_ANON_KEY"],
         "privacy_contact_email": cfg["PRIVACY_CONTACT_EMAIL"],
+        # Público (vai na URL de autorização); exibido para diagnosticar "Invalid redirect_uri"
+        "meta_redirect_uri": cfg["META_REDIRECT_URI"],
     })
 
 
