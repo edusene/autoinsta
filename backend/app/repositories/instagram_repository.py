@@ -2,7 +2,7 @@
 PUBLIC_COLUMNS = """
     id, user_id, ig_user_id, username, name, account_type, profile_picture_url, status,
     permissions, webhook_subscribed, last_webhook_at, last_error, connected_at,
-    disconnected_at, created_at, updated_at
+    disconnected_at, connection_method, created_at, updated_at
 """
 
 
@@ -32,13 +32,15 @@ def get_by_ig_user_id(conn, ig_user_id: str) -> dict | None:
     ).fetchone()
 
 
-def upsert_connected(conn, user_id: str, profile: dict, permissions: list[str]) -> dict:
+def upsert_connected(
+    conn, user_id: str, profile: dict, permissions: list[str], connection_method: str = "oauth"
+) -> dict:
     return conn.execute(
         f"""
         insert into instagram_accounts
             (user_id, ig_user_id, username, name, account_type, profile_picture_url,
-             status, permissions, last_error, connected_at, disconnected_at)
-        values (%s, %s, %s, %s, %s, %s, 'connected', %s, null, now(), null)
+             status, permissions, last_error, connected_at, disconnected_at, connection_method)
+        values (%s, %s, %s, %s, %s, %s, 'connected', %s, null, now(), null, %s)
         on conflict (ig_user_id) do update set
             user_id = excluded.user_id,
             username = excluded.username,
@@ -49,7 +51,8 @@ def upsert_connected(conn, user_id: str, profile: dict, permissions: list[str]) 
             permissions = excluded.permissions,
             last_error = null,
             connected_at = now(),
-            disconnected_at = null
+            disconnected_at = null,
+            connection_method = excluded.connection_method
         returning {PUBLIC_COLUMNS}
         """,
         (
@@ -60,6 +63,7 @@ def upsert_connected(conn, user_id: str, profile: dict, permissions: list[str]) 
             profile.get("account_type"),
             profile.get("profile_picture_url"),
             permissions,
+            connection_method,
         ),
     ).fetchone()
 

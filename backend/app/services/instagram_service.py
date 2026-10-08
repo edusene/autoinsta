@@ -22,14 +22,38 @@ REFRESH_WITHIN_DAYS = 15
 
 # --- configuração -----------------------------------------------------------
 
-def missing_platform_config() -> list[str]:
+def _missing(keys: list[str]) -> list[str]:
     cfg = current_app.config
-    keys = ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI", "META_VERIFY_TOKEN", "TOKEN_ENCRYPTION_KEY"]
     return [k for k in keys if not cfg.get(k)]
 
 
+def missing_oauth_config() -> list[str]:
+    """Botão "Conectar Instagram" (login oficial): exige a chave secreta para trocar o código."""
+    return _missing(["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI", "TOKEN_ENCRYPTION_KEY"])
+
+
+def missing_webhook_config() -> list[str]:
+    """Receber eventos: verify token + algum segredo para validar a assinatura da Meta."""
+    cfg = current_app.config
+    missing = _missing(["META_VERIFY_TOKEN"])
+    if not (cfg.get("META_APP_SECRET") or cfg.get("META_WEBHOOK_EXTRA_SECRETS")):
+        missing.append("META_APP_SECRET")
+    return missing
+
+
+def server_token_available(email: str | None) -> bool:
+    """O token do painel (.env) só pode ser usado pelo usuário dono configurado."""
+    cfg = current_app.config
+    owner = cfg.get("INSTAGRAM_TOKEN_OWNER_EMAIL")
+    return bool(cfg.get("INSTAGRAM_ACCESS_TOKEN") and owner and email and email.strip().lower() == owner)
+
+
+def connect_options(email: str | None) -> dict:
+    return {"oauth": not missing_oauth_config(), "server_token": server_token_available(email)}
+
+
 def _ensure_configured() -> None:
-    missing = missing_platform_config()
+    missing = missing_oauth_config()
     if missing:
         logger.error("Integração Meta sem configuração: %s", ", ".join(missing))
         raise AppError(
@@ -103,6 +127,51 @@ def complete_connection(user_id: str, code: str, state: str) -> dict:
             details={"meta_message": exc.message},
         ) from exc
 
+    _link_account(user_id, profile, token, expires_at, permissions, "oauth")
+    return get_status(user_id)
+
+
+def connect_with_server_token(user_id: str, email: str | None) -> dict:
+    """Conecta usando o token gerado no painel da Meta ("Gerar tokens de acesso").
+
+    Fluxo oficial previsto pela Meta para o dono do app: o token de longa duração (60 dias)
+    é criado no painel e configurado no servidor, sem passar pelo OAuth.
+    """
+    cfg = current_app.config
+    if not cfg.get("INSTAGRAM_ACCESS_TOKEN"):
+        raise AppError("SERVER_TOKEN_NOT_CONFIGURED", "Nenhum token do Instagram configurado no servidor.", 503)
+    if not server_token_available(email):
+        raise AppError("SERVER_TOKEN_FORBIDDEN",
+                       "O token configurado no servidor só pode ser usado pelo usuário dono da conta.", 403)
+    if not cfg.get("TOKEN_ENCRYPTION_KEY"):
+        raise AppError("META_NOT_CONFIGURED", "TOKEN_ENCRYPTION_KEY não configurada no servidor.", 503)
+
+    token = cfg["INSTAGRAM_ACCESS_TOKEN"].strip()
+    try:
+        profile = meta_client.get_me(token)
+    except MetaApiError as exc:
+        raise AppError(
+            "INSTAGRAM_TOKEN_INVALID",
+            "O token configurado foi recusado pela Meta. Gere um novo token no painel e atualize INSTAGRAM_ACCESS_TOKEN.",
+            502,
+            details={"meta_message": exc.message},
+        ) from exc
+
+    expected = (cfg.get("INSTAGRAM_ACCOUNT_ID") or "").strip()
+    if expected and expected not in {str(profile.get("user_id", "")), str(profile.get("id", ""))}:
+        raise AppError(
+            "INSTAGRAM_ACCOUNT_MISMATCH",
+            "O token pertence a outra conta do Instagram (INSTAGRAM_ACCOUNT_ID não confere).",
+        )
+
+    # Tokens gerados no painel valem 60 dias; a renovação automática estende o prazo.
+    expires_at = datetime.now(timezone.utc) + timedelta(days=60)
+    # Permissões não são informadas junto com tokens do painel: vêm do caso de uso configurado no app.
+    _link_account(user_id, profile, token, expires_at, [], "server_token")
+    return get_status(user_id)
+
+
+def _link_account(user_id: str, profile: dict, token: str, expires_at, permissions: list[str], method: str) -> None:
     if not profile.get("user_id"):
         raise AppError("INSTAGRAM_AUTH_FAILED", "A Meta não retornou o ID da conta.", 502)
     account_type = str(profile.get("account_type") or "").upper()
@@ -126,12 +195,12 @@ def complete_connection(user_id: str, code: str, state: str) -> dict:
             repo.delete_token(conn, previous["id"])
             repo.set_status(conn, previous["id"], "disconnected")
 
-        account = repo.upsert_connected(conn, user_id, {**profile, "user_id": str(profile["user_id"])}, permissions)
+        account = repo.upsert_connected(conn, user_id, {**profile, "user_id": str(profile["user_id"])},
+                                        permissions, method)
         repo.save_token(conn, account["id"], user_id, token_service.encrypt(token), expires_at)
 
     _subscribe(account["id"], token)
-    logger.info("Instagram conectado: account=%s user=%s", account["id"], user_id)
-    return get_status(user_id)
+    logger.info("Instagram conectado (%s): account=%s user=%s", method, account["id"], user_id)
 
 
 def _subscribe(account_id: str, token: str) -> bool:
@@ -187,6 +256,7 @@ def get_status(user_id: str) -> dict:
             "connected_at": account["connected_at"],
             "token_expires_at": token["expires_at"] if token else None,
             "last_error": account["last_error"],
+            "connection_method": account["connection_method"],
         },
     }
 
@@ -225,14 +295,17 @@ def diagnostics(user_id: str) -> dict:
         checks.append({"key": key, "label": label, "status": "ok" if ok else ("warning" if ok is None else "error"),
                        "detail": detail})
 
-    missing = missing_platform_config()
-    add("platform_config", "Configuração da plataforma (Meta App)", not missing,
-        f"Variáveis ausentes no servidor: {', '.join(missing)}" if missing else "")
-
     with db.connection() as conn:
         account = repo.get_for_user(conn, user_id)
         token_row = repo.get_token(conn, account["id"]) if account else None
         recent_events = webhook_event_repository.count_recent_for_account(conn, account["id"]) if account else 0
+
+    server_token = bool(account and account["connection_method"] == "server_token")
+    missing = missing_webhook_config() + _missing(["TOKEN_ENCRYPTION_KEY"])
+    if not server_token:
+        missing += [k for k in missing_oauth_config() if k not in missing]
+    add("platform_config", "Configuração da plataforma (Meta App)", not missing,
+        f"Variáveis ausentes no servidor: {', '.join(missing)}" if missing else "")
 
     connected = bool(account and account["status"] == "connected")
     add("account_connected", "Conta conectada", connected,
@@ -255,10 +328,15 @@ def diagnostics(user_id: str) -> dict:
         except AppError as exc:
             add("token_valid", "Token válido", False, exc.message)
 
-        perms = set(account["permissions"] or [])
-        missing_perms = [s for s in meta_client.REQUIRED_SCOPES if s not in perms]
-        add("permissions", "Permissões verificadas", not missing_perms,
-            f"Faltando: {', '.join(missing_perms)}" if missing_perms else ", ".join(sorted(perms)))
+        if server_token:
+            add("permissions", "Permissões", None,
+                "Token gerado no painel da Meta: confirme no caso de uso do app as permissões "
+                + ", ".join(meta_client.REQUIRED_SCOPES) + ".")
+        else:
+            perms = set(account["permissions"] or [])
+            missing_perms = [s for s in meta_client.REQUIRED_SCOPES if s not in perms]
+            add("permissions", "Permissões verificadas", not missing_perms,
+                f"Faltando: {', '.join(missing_perms)}" if missing_perms else ", ".join(sorted(perms)))
 
         add("webhook_subscribed", "Webhook configurado", account["webhook_subscribed"],
             "Campos: messages, comments" if account["webhook_subscribed"]

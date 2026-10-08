@@ -82,6 +82,19 @@ export function InstagramPage() {
     }
   }
 
+  // Token gerado no painel da Meta e configurado no servidor (sem passar pelo login do Instagram)
+  const connectWithServerToken = async () => {
+    setBusy(true)
+    setActionError(null)
+    try {
+      setData(await api.post<InstagramStatus>('/api/instagram/connect-token'))
+    } catch (err) {
+      setActionError(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const disconnect = async () => {
     setActionError(null)
     try {
@@ -94,6 +107,10 @@ export function InstagramPage() {
   if (loading && !data) return <Loading />
   const account = data?.account
   const expired = data?.status === 'token_expired'
+  const options = data?.connect_options ?? { oauth: false, server_token: false }
+  const viaServerToken = account?.connection_method === 'server_token'
+  const reconnect = viaServerToken && options.server_token ? connectWithServerToken : connect
+  const canReconnect = viaServerToken ? options.server_token : options.oauth
 
   return (
     <div className="page stack" style={{ maxWidth: 860 }}>
@@ -122,12 +139,15 @@ export function InstagramPage() {
                 <span className="badge badge-success">Conectado</span>
                 <span>Desde {formatDateTime(account.connected_at)}</span>
                 <span>· Último evento {timeAgo(account.last_webhook_at)}</span>
+                {viaServerToken && <span>· via token do painel da Meta</span>}
               </div>
             </div>
             <span className="spacer" />
-            <button className="btn" onClick={connect} disabled={busy}>
-              Reconectar
-            </button>
+            {canReconnect && (
+              <button className="btn" onClick={reconnect} disabled={busy}>
+                Reconectar
+              </button>
+            )}
             <ConfirmButton onConfirm={disconnect} confirmLabel="Desconectar">
               Desconectar
             </ConfirmButton>
@@ -139,12 +159,26 @@ export function InstagramPage() {
               <p className="muted" style={{ marginTop: 6, maxWidth: 560 }}>
                 {expired
                   ? `A autorização de @${account?.username} expirou ou foi revogada. Reconecte para reativar as automações.`
-                  : 'Você será levado ao Instagram para autorizar o acesso. Só pedimos as permissões necessárias para ler e responder mensagens e comentários.'}
+                  : 'Só usamos as permissões necessárias para ler e responder mensagens e comentários.'}
               </p>
             </div>
-            <button className="btn btn-instagram btn-lg" onClick={connect} disabled={busy}>
-              {busy ? 'Abrindo Instagram…' : expired ? 'Reconectar Instagram' : 'Conectar Instagram'}
-            </button>
+            <div className="row">
+              {options.server_token && (
+                <button className="btn btn-instagram btn-lg" onClick={connectWithServerToken} disabled={busy}>
+                  {busy ? 'Conectando…' : 'Conectar com o token do painel da Meta'}
+                </button>
+              )}
+              {options.oauth && (
+                <button className={`btn btn-lg ${options.server_token ? '' : 'btn-instagram'}`} onClick={connect} disabled={busy}>
+                  {busy ? 'Abrindo Instagram…' : expired ? 'Reconectar Instagram' : 'Conectar com login do Instagram'}
+                </button>
+              )}
+            </div>
+            {!options.oauth && !options.server_token && (
+              <div className="alert alert-warning">
+                A conexão com o Instagram ainda não foi configurada pelo administrador da plataforma.
+              </div>
+            )}
             <ul className="small muted" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
               <li>A conta precisa ser profissional (Empresa ou Criador de conteúdo).</li>
               <li>

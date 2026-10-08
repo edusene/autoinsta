@@ -34,6 +34,9 @@ def _secrets() -> list[str]:
 
 def verify_signature(raw_body: bytes, header_value: str | None) -> bool:
     """Valida X-Hub-Signature-256 (HMAC-SHA256 do corpo bruto com o app secret)."""
+    if not _secrets():
+        logger.error("Webhook recusado: nenhum segredo configurado (defina META_APP_SECRET).")
+        return False
     if not header_value or not header_value.startswith("sha256="):
         return False
     received = header_value.removeprefix("sha256=").strip()

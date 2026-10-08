@@ -88,7 +88,10 @@ export interface InstagramStatus {
     connected_at: string | null
     token_expires_at: string | null
     last_error: string | null
+    connection_method: 'oauth' | 'server_token'
   }
+  /** Formas de conexão disponíveis para o usuário logado (só em /api/instagram/*) */
+  connect_options?: { oauth: boolean; server_token: boolean }
 }
 
 export interface DiagnosticCheck {

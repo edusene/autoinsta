@@ -109,7 +109,8 @@ def test_webhook_subscription_failure_is_reported(user, meta_mock):
 
 def test_disconnect_removes_token(user, connected_account):
     data = user.post("/api/instagram/disconnect").get_json()["data"]
-    assert data == {"connected": False, "status": "disconnected", "account": None}
+    assert data == {"connected": False, "status": "disconnected", "account": None,
+                    "connect_options": {"oauth": True, "server_token": False}}
     with db.connection() as conn:
         assert conn.execute("select count(*) as n from oauth_tokens").fetchone()["n"] == 0
 
