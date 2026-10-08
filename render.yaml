@@ -1,6 +1,7 @@
 # Blueprint do Render — ambiente de TESTE (plano free).
 # Render Dashboard > New > Blueprint > selecione este repositório.
-# Variáveis com "sync: false" são pedidas na criação (preencha conforme o README).
+# Variáveis com "sync: false" são pedidas na criação: pode deixar em branco e depois
+# colar backend/.env.render e frontend/.env.render em Environment > "Add from .env".
 services:
   # ---------------------------------------------------------------- API Flask
   - type: web
@@ -28,9 +29,9 @@ services:
       - key: OPENAI_DEFAULT_MODEL
         value: gpt-6-luna
       - key: SECRET_KEY
-        generateValue: true
+        sync: false
       - key: META_VERIFY_TOKEN
-        generateValue: true
+        sync: false
       - key: TOKEN_ENCRYPTION_KEY
         sync: false
       - key: DATABASE_URL

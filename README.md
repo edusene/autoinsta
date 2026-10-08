@@ -138,7 +138,20 @@ Cobrem autenticação/JWT, isolamento entre usuários, CRUD e validação de wor
 
 Frontend: `npm run build` (type-check + build).
 
-## 7. Deploy (Linux)
+## 7. Deploy
+
+### Render (ambiente de teste, plano free)
+
+1. Suba o repositório para o GitHub e, no Render, use **New → Blueprint** (lê o `render.yaml`).
+2. As variáveis podem ficar vazias na criação. Depois, em cada serviço, vá em **Environment → Add from .env** e cole:
+   - `autoinsta-api`: o conteúdo de `backend/.env.render`
+   - `autoinsta-web`: o conteúdo de `frontend/.env.render` (variáveis `VITE_*` entram no build, então faça um novo deploy depois de alterar)
+
+   Esses arquivos são ignorados pelo Git (`.env.*`) e nunca devem ser versionados.
+3. No plano free não existe background worker: `EMBEDDED_WORKER=true` roda o worker dentro da API. O serviço hiberna após 15 min sem tráfego (cerca de 1 min para acordar); a Meta reenvia webhooks não confirmados.
+4. Supabase: use a connection string do **Session pooler** (o Render só tem IPv4).
+
+### Linux / Docker
 
 A API e o worker usam a mesma imagem:
 
