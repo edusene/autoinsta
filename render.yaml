@@ -1,0 +1,77 @@
+# Blueprint do Render — ambiente de TESTE (plano free).
+# Render Dashboard > New > Blueprint > selecione este repositório.
+# Variáveis com "sync: false" são pedidas na criação (preencha conforme o README).
+services:
+  # ---------------------------------------------------------------- API Flask
+  - type: web
+    name: autoinsta-api
+    runtime: python
+    plan: free
+    region: virginia            # mesma região do Supabase (us-east-1)
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Aplica migrations pendentes e sobe a API
+    startCommand: python migrate.py && gunicorn -c gunicorn.conf.py wsgi:app
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: EMBEDDED_WORKER    # plano free não tem background worker
+        value: "true"
+      - key: DB_POOL_MAX_SIZE
+        value: "3"
+      - key: META_GRAPH_API_VERSION
+        value: v25.0
+      - key: OPENAI_DEFAULT_MODEL
+        value: gpt-6-luna
+      - key: SECRET_KEY
+        generateValue: true
+      - key: META_VERIFY_TOKEN
+        generateValue: true
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_REDIRECT_URI
+        sync: false
+      - key: META_WEBHOOK_EXTRA_SECRETS
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+  # ---------------------------------------------------------- Frontend estático
+  - type: web
+    name: autoinsta-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    routes:
+      - type: rewrite           # SPA: todas as rotas servem o index.html
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false

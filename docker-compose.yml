@@ -1,0 +1,32 @@
+# Execução em servidor Linux: API + worker (o banco é o Postgres do Supabase).
+#   docker compose up -d --build
+# O frontend é um site estático (frontend/dist) — publique em CDN/hosting estático
+# ou atrás do mesmo reverse proxy (ver README > Deploy).
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: backend/.env
+    environment:
+      APP_ENV: production
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: backend/.env
+    environment:
+      APP_ENV: production
+    command: ["python", "worker.py"]
+    restart: unless-stopped
+    depends_on:
+      - api

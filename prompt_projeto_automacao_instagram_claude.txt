@@ -1,0 +1,1169 @@
+PROMPT PARA CLAUDE — CONSTRUÇÃO DE PLATAFORMA DE AUTOMAÇÃO PARA INSTAGRAM
+
+Você é o principal desenvolvedor deste projeto. Sua missão é construir uma plataforma web de automação para Instagram, inspirada conceitualmente em ferramentas como ManyChat, mas começando com um MVP enxuto, funcional e bem estruturado.
+
+IMPORTANTE:
+- Não quero uma cópia visual ou de código do ManyChat.
+- Quero construir nosso próprio sistema.
+- O foco inicial é AUTOMOÇÃO + WORKFLOW PARA INSTAGRAM.
+- A integração com Instagram deve utilizar exclusivamente as APIs oficiais da Meta.
+- NÃO utilize métodos não oficiais, scraping, automação de navegador, bibliotecas que simulem usuário do Instagram ou qualquer técnica que possa causar bloqueio da conta.
+- Antes de implementar qualquer integração da Meta, consulte a documentação oficial vigente e confirme quais endpoints, permissões, produtos e tipos de conta são atualmente suportados.
+- Não invente endpoints, permissões, campos ou comportamentos da API.
+- Se alguma funcionalidade desejada não for oficialmente suportada, informe isso e proponha a alternativa oficial mais próxima.
+- O sistema deve ser simples na primeira versão, mas com arquitetura que permita evolução.
+
+==================================================
+1. OBJETIVO DO PRODUTO
+==================================================
+
+Criar uma plataforma web onde o usuário consiga:
+
+1. Criar uma conta e entrar no painel.
+2. Conectar sua conta do Instagram de forma simples e segura através da Meta.
+3. Visualizar o status da conexão.
+4. Criar workflows/automações.
+5. Criar gatilhos.
+6. Adicionar condições.
+7. Adicionar ações.
+8. Organizar visualmente o fluxo.
+9. Salvar, editar, duplicar, ativar, desativar e excluir workflows.
+10. Executar ações automaticamente quando um gatilho compatível ocorrer.
+11. Utilizar IA da OpenAI em determinados pontos do workflow.
+12. Visualizar logs das execuções.
+13. Configurar dados da integração.
+14. Ter uma interface simples e profissional.
+
+A visão futura é transformar isso em uma plataforma muito mais próxima de um ManyChat completo, mas NÃO tente construir tudo agora.
+
+==================================================
+2. STACK PRINCIPAL
+==================================================
+
+Backend:
+- Python
+- Flask
+
+Banco:
+- Supabase
+- PostgreSQL do Supabase
+
+Frontend:
+- Escolha uma tecnologia adequada para construir um editor visual de workflows.
+- Pode utilizar React + Vite caso seja a opção mais apropriada.
+- O frontend deve conversar com o Flask por API.
+- Não crie um frontend excessivamente complexo.
+
+Integração:
+- Meta Graph API / APIs oficiais do Instagram
+- OAuth oficial da Meta
+- Webhooks oficiais da Meta
+
+IA:
+- OpenAI API
+
+Hospedagem:
+- O projeto deve ser preparado para deploy em ambiente Linux/cloud.
+- Não assuma que haverá execução local permanente.
+- Variáveis sensíveis devem estar em ambiente (.env localmente e secrets no servidor).
+
+==================================================
+3. PRINCÍPIO ARQUITETURAL
+==================================================
+
+Separe claramente:
+
+FRONTEND
+    ↓
+API FLASK
+    ↓
+SERVIÇOS / REGRAS DE NEGÓCIO
+    ↓
+META / OPENAI / SUPABASE
+
+Evite colocar toda a lógica dentro das rotas Flask.
+
+Crie serviços separados para:
+
+- autenticação
+- usuários
+- Instagram/Meta
+- workflows
+- execução de workflows
+- webhooks
+- OpenAI
+- logs
+- tokens
+- configurações
+
+O objetivo é manter o código fácil de entender e modificar.
+
+==================================================
+4. AUTENTICAÇÃO
+==================================================
+
+Implemente autenticação segura.
+
+O usuário deve conseguir:
+
+- criar conta
+- fazer login
+- fazer logout
+- manter sessão autenticada
+- acessar apenas seus próprios dados
+
+Não misture dados entre usuários.
+
+Utilize mecanismos seguros de autenticação e autorização.
+
+Se usar Supabase Auth, avalie se ele é a melhor opção para o MVP e utilize corretamente os recursos oficiais.
+
+Nunca armazene senha em texto puro.
+
+==================================================
+5. CONEXÃO COM INSTAGRAM / META
+==================================================
+
+Esta é uma das partes mais importantes do projeto.
+
+A experiência do usuário deve ser aproximadamente:
+
+Configurações
+→ Instagram
+→ Conectar Instagram
+→ Login/autorização da Meta
+→ Usuário concede permissões
+→ Retorno para a plataforma
+→ Sistema valida a conexão
+→ Conta aparece como conectada
+
+Interface:
+
+INSTAGRAM
+[ Conectar Instagram ]
+
+Depois da conexão:
+
+Instagram conectado
+@usuario
+Status: Conectado
+[Reconectar]
+[Desconectar]
+
+REQUISITOS:
+
+- Utilizar OAuth oficial da Meta.
+- Utilizar somente permissões realmente necessárias.
+- Não solicitar permissões desnecessárias.
+- Armazenar tokens de forma segura.
+- Não exibir tokens no frontend.
+- Implementar tratamento de expiração/renovação conforme o fluxo oficial vigente.
+- Validar o vínculo entre usuário da plataforma e conta Instagram.
+- Implementar desconexão.
+- Implementar tratamento de erros de autorização.
+- Registrar informações úteis de diagnóstico sem registrar secrets.
+
+ANTES DE IMPLEMENTAR:
+
+Consulte a documentação oficial atual da Meta e determine:
+
+- requisitos atuais para contas Instagram;
+- requisitos de conta profissional, caso aplicável;
+- produto/API correto;
+- permissões necessárias;
+- fluxo OAuth atual;
+- endpoints atuais;
+- webhooks disponíveis;
+- limitações atuais;
+- tipos de mensagens/eventos que podem ser recebidos;
+- ações que podem ser executadas oficialmente.
+
+Não assuma que recursos antigos da Instagram Basic Display API continuam disponíveis ou adequados para automação.
+
+==================================================
+6. WEBHOOKS
+==================================================
+
+A plataforma deverá possuir endpoint para receber webhooks oficiais da Meta.
+
+Exemplo conceitual:
+
+POST /webhooks/meta
+
+GET /webhooks/meta
+
+O GET deve permitir a verificação exigida pela Meta.
+
+O POST deve:
+
+1. validar a requisição;
+2. identificar o evento;
+3. registrar o evento;
+4. identificar a conta;
+5. encontrar workflows relacionados;
+6. encaminhar para o motor de automação;
+7. retornar rapidamente uma resposta apropriada.
+
+Não processe operações demoradas diretamente no request do webhook se isso puder causar timeout.
+
+Para operações demoradas, crie uma estrutura de jobs/background processing.
+
+==================================================
+7. WORKFLOW BUILDER
+==================================================
+
+O coração do produto será o editor visual.
+
+Quero algo conceitualmente semelhante ao funcionamento de ferramentas de automação:
+
+[ GATILHO ]
+      ↓
+[ AÇÃO ]
+      ↓
+[ CONDIÇÃO ]
+     ↙ ↘
+[ AÇÃO ] [ AÇÃO ]
+
+O usuário deve conseguir adicionar blocos e conectar blocos.
+
+Cada workflow possui:
+
+- nome
+- descrição opcional
+- status
+- gatilho
+- nós
+- conexões
+- configurações
+- data de criação
+- data de atualização
+
+Status:
+
+- Rascunho
+- Ativo
+- Inativo
+
+==================================================
+8. EDITOR VISUAL
+==================================================
+
+Use uma biblioteca madura para editor de workflow, se isso reduzir o tempo e a complexidade.
+
+Uma opção recomendada é React Flow, mas você pode escolher outra se houver justificativa técnica.
+
+O editor deve permitir:
+
+- adicionar nó;
+- remover nó;
+- editar nó;
+- mover nó;
+- conectar nós;
+- desconectar nós;
+- zoom;
+- pan;
+- salvar;
+- validar workflow;
+- ativar workflow.
+
+Não precisa criar inicialmente:
+
+- colaboração em tempo real;
+- edição simultânea;
+- versionamento avançado;
+- marketplace de templates;
+- sistema complexo de permissões.
+
+==================================================
+9. TIPOS DE NÓ
+==================================================
+
+Crie uma arquitetura extensível de nodes.
+
+Categorias:
+
+GATILHOS
+
+Exemplos, somente se suportados pela API oficial vigente:
+
+- nova mensagem recebida;
+- evento de mensagem compatível;
+- comentário/evento compatível;
+- outros eventos oficiais disponíveis.
+
+AÇÕES
+
+Exemplos:
+
+- enviar resposta;
+- enviar mensagem;
+- adicionar atraso;
+- chamar IA;
+- definir variável;
+- alterar variável;
+- executar condição;
+- finalizar workflow.
+
+CONDIÇÕES
+
+Exemplos:
+
+- texto contém;
+- texto é igual;
+- variável existe;
+- variável possui valor;
+- condição baseada em resposta da IA;
+- outros operadores simples.
+
+==================================================
+10. MOTOR DE EXECUÇÃO
+==================================================
+
+Crie um Workflow Engine.
+
+Ele deve:
+
+1. receber um evento;
+2. localizar workflows ativos;
+3. verificar o gatilho;
+4. iniciar execução;
+5. processar os nós na ordem correta;
+6. avaliar condições;
+7. executar ações;
+8. registrar o resultado;
+9. continuar ou finalizar o workflow.
+
+Cada execução deve possuir um identificador.
+
+Exemplo:
+
+execution_id
+workflow_id
+trigger_event
+started_at
+finished_at
+status
+error
+
+==================================================
+11. FILA / BACKGROUND JOBS
+==================================================
+
+Como workflows podem possuir:
+
+- delays;
+- chamadas à Meta;
+- chamadas à OpenAI;
+- múltiplas ações;
+
+não faça tudo de forma síncrona quando isso prejudicar a estabilidade.
+
+Para o MVP, implemente uma solução simples.
+
+Pode utilizar:
+
+- Celery + Redis
+OU
+- RQ + Redis
+OU
+- outra solução simples e adequada.
+
+Se a complexidade não for necessária inicialmente, crie uma arquitetura que permita adicionar uma fila posteriormente.
+
+Não introduza infraestrutura desnecessária sem motivo.
+
+==================================================
+12. DELAYS
+==================================================
+
+O workflow deve permitir futuramente:
+
+Ação:
+"Esperar 30 segundos"
+
+Depois:
+"Enviar mensagem"
+
+Não use sleep() segurando uma requisição web.
+
+O delay deve ser processado por mecanismo apropriado de jobs.
+
+==================================================
+13. INTEGRAÇÃO COM OPENAI
+==================================================
+
+Criar um serviço separado:
+
+OpenAIService
+
+Nunca coloque chamadas da OpenAI diretamente dentro de rotas Flask.
+
+O workflow poderá possuir um nó:
+
+[ IA ]
+
+Configurações possíveis:
+
+- modelo;
+- system prompt;
+- instruções;
+- mensagem/contexto de entrada;
+- temperatura, se suportada pelo modelo escolhido;
+- formato da resposta;
+- variável onde salvar a resposta.
+
+Exemplo:
+
+Mensagem recebida
+      ↓
+IA
+      ↓
+Condição
+      ↓
+Resposta
+
+A IA deve poder receber contexto relevante do workflow.
+
+Não envie dados desnecessários para a OpenAI.
+
+As chaves da OpenAI nunca podem aparecer no frontend.
+
+Use variável:
+
+OPENAI_API_KEY
+
+Não coloque API key diretamente no código.
+
+==================================================
+14. VARIÁVEIS DO WORKFLOW
+==================================================
+
+Crie um sistema simples de variáveis.
+
+Exemplos:
+
+{{user.name}}
+{{user.username}}
+{{message.text}}
+{{ai.response}}
+
+Possibilidade futura:
+
+{{contact.custom_field}}
+
+O sistema precisa ter uma forma segura de substituir essas variáveis durante a execução.
+
+Não permita execução arbitrária de código através das variáveis.
+
+==================================================
+15. CRM BÁSICO
+==================================================
+
+Não crie um CRM enorme.
+
+Apenas a estrutura necessária para automação.
+
+Tabela/entidade de contatos:
+
+- id
+- user_id
+- instagram_user_id, quando disponível
+- username, quando disponível
+- nome, quando disponível
+- created_at
+- updated_at
+- metadata
+
+Também deve ser possível registrar:
+
+- última interação;
+- último evento;
+- status básico.
+
+O CRM completo pode ficar para uma fase posterior.
+
+==================================================
+16. LOGS
+==================================================
+
+O usuário deve conseguir visualizar:
+
+- workflow executado;
+- horário;
+- gatilho;
+- status;
+- duração;
+- erro, se houver.
+
+Exemplo:
+
+Workflow: Atendimento Instagram
+Status: Sucesso
+Início: 10:31
+Fim: 10:31
+
+Ou:
+
+Status: Erro
+Mensagem: Falha ao enviar mensagem para Meta
+
+Os logs devem ajudar o desenvolvedor a diagnosticar problemas.
+
+==================================================
+17. BANCO DE DADOS — SUPABASE
+==================================================
+
+Crie uma estrutura inicial semelhante a:
+
+users / profiles
+instagram_accounts
+oauth_tokens
+workflows
+workflow_nodes
+workflow_edges
+workflow_executions
+workflow_execution_logs
+contacts
+contact_events
+ai_configurations
+
+Você pode ajustar os nomes.
+
+IMPORTANTE:
+
+Todas as entidades que pertencem a um usuário devem possuir relacionamento claro com esse usuário.
+
+Use:
+
+- UUIDs;
+- foreign keys;
+- indexes adequados;
+- timestamps;
+- constraints;
+- integridade referencial.
+
+Não crie tabelas sem necessidade.
+
+Avalie RLS do Supabase e implemente corretamente se o acesso ao banco for feito diretamente pelo frontend.
+
+Se todo acesso passar pelo backend, mantenha a arquitetura consistente e nunca exponha credenciais administrativas no navegador.
+
+==================================================
+18. ESTRUTURA DE PROJETO
+==================================================
+
+Sugestão:
+
+/project
+    /backend
+        /app
+            __init__.py
+            config.py
+            extensions.py
+
+            /routes
+                auth.py
+                instagram.py
+                workflows.py
+                webhooks.py
+                contacts.py
+
+            /services
+                auth_service.py
+                meta_service.py
+                instagram_service.py
+                workflow_service.py
+                workflow_engine.py
+                openai_service.py
+                contact_service.py
+
+            /models
+                ...
+
+            /repositories
+                ...
+
+            /tasks
+                ...
+
+            /utils
+                ...
+
+        run.py
+        requirements.txt
+
+    /frontend
+        /src
+            /components
+            /pages
+            /services
+            /hooks
+            /types
+            /workflow
+        package.json
+
+    /database
+        schema.sql
+        migrations/
+
+    .env.example
+    README.md
+
+Você pode alterar essa estrutura se houver uma razão técnica melhor.
+
+==================================================
+19. FRONTEND
+==================================================
+
+O painel deve ter visual profissional, simples e limpo.
+
+Páginas mínimas:
+
+/login
+/register
+
+/dashboard
+
+/instagram
+/workflows
+/workflows/new
+/workflows/:id
+
+/contacts
+
+/settings
+
+/workflows/:id/logs
+
+Sidebar:
+
+Dashboard
+Workflows
+Instagram
+Contatos
+Logs
+Configurações
+
+==================================================
+20. DASHBOARD
+==================================================
+
+Mostrar inicialmente:
+
+- Instagram conectado ou não;
+- quantidade de workflows;
+- workflows ativos;
+- execuções recentes;
+- erros recentes.
+
+Não precisa criar gráficos complexos.
+
+==================================================
+21. WORKFLOWS
+==================================================
+
+Lista:
+
+Nome
+Status
+Última atualização
+Execuções
+Ações
+
+Botões:
+
+Novo Workflow
+Editar
+Duplicar
+Ativar
+Desativar
+Excluir
+
+==================================================
+22. SEGURANÇA
+==================================================
+
+Obrigatório:
+
+- secrets somente no backend;
+- .env fora do Git;
+- criar .env.example;
+- validação de entrada;
+- proteção contra SQL injection;
+- autenticação;
+- autorização;
+- CORS configurado corretamente;
+- rate limiting onde fizer sentido;
+- logs sem tokens;
+- tratamento de erros;
+- HTTPS em produção;
+- validação de assinatura dos webhooks quando exigida;
+- não confiar em IDs enviados pelo frontend;
+- verificar ownership dos recursos.
+
+Nunca retornar secrets em respostas da API.
+
+==================================================
+23. CONFIGURAÇÕES
+==================================================
+
+Criar uma página de configurações com:
+
+Conta
+Instagram
+IA
+Sistema
+
+Instagram:
+
+Status da conexão
+Conta conectada
+Reconectar
+Desconectar
+
+IA:
+
+OpenAI configurada ou não
+Modelo padrão
+
+Não exibir a chave completa.
+
+==================================================
+24. API
+==================================================
+
+Crie uma API organizada.
+
+Exemplos conceituais:
+
+POST /api/auth/login
+POST /api/auth/register
+
+GET /api/instagram/status
+GET /api/instagram/connect
+GET /api/instagram/callback
+POST /api/instagram/disconnect
+
+GET /api/workflows
+POST /api/workflows
+GET /api/workflows/<id>
+PUT /api/workflows/<id>
+DELETE /api/workflows/<id>
+
+POST /api/workflows/<id>/activate
+POST /api/workflows/<id>/deactivate
+
+GET /api/workflows/<id>/executions
+
+GET /api/contacts
+
+GET /api/logs
+
+POST /webhooks/meta
+GET /webhooks/meta
+
+Esses endpoints são apenas uma referência arquitetural.
+
+Adapte conforme necessário.
+
+==================================================
+25. TRATAMENTO DE ERROS
+==================================================
+
+A API deve retornar respostas consistentes.
+
+Exemplo:
+
+{
+  "success": false,
+  "error": {
+    "code": "INSTAGRAM_NOT_CONNECTED",
+    "message": "Instagram não conectado."
+  }
+}
+
+Não exponha stack trace para usuários em produção.
+
+Registre detalhes técnicos no backend.
+
+==================================================
+26. DOCUMENTAÇÃO
+==================================================
+
+Crie README.md contendo:
+
+- descrição;
+- stack;
+- requisitos;
+- instalação;
+- configuração;
+- variáveis de ambiente;
+- banco;
+- Meta Developer App;
+- configuração OAuth;
+- webhooks;
+- OpenAI;
+- execução local;
+- testes;
+- deploy.
+
+Crie .env.example com tudo que for necessário.
+
+Exemplo:
+
+FLASK_ENV=
+SECRET_KEY=
+
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+META_APP_ID=
+META_APP_SECRET=
+META_REDIRECT_URI=
+META_VERIFY_TOKEN=
+
+OPENAI_API_KEY=
+
+REDIS_URL=
+
+Nunca colocar valores reais.
+
+==================================================
+27. TESTES
+==================================================
+
+Crie testes mínimos para:
+
+- autenticação;
+- criação de workflow;
+- validação de workflow;
+- execução de condição;
+- substituição de variáveis;
+- integração com serviços utilizando mocks;
+- webhook;
+- tratamento de erros.
+
+Não dependa de uma conta real do Instagram para todos os testes.
+
+Use mocks para Meta e OpenAI.
+
+==================================================
+28. OBSERVABILIDADE
+==================================================
+
+Crie logs úteis.
+
+Diferencie:
+
+INFO
+WARNING
+ERROR
+
+Nunca registre:
+
+- access tokens;
+- refresh tokens;
+- API keys;
+- senhas;
+- dados sensíveis desnecessários.
+
+==================================================
+29. MVP — NÃO EXAGERE
+==================================================
+
+O MVP deve entregar:
+
+1. Login.
+2. Dashboard.
+3. Conexão oficial com Instagram.
+4. Recebimento de eventos oficiais via webhook.
+5. Criador visual de workflow.
+6. Gatilho.
+7. Ações básicas.
+8. Condições simples.
+9. Nó de IA.
+10. Execução.
+11. Logs.
+12. Ativar/desativar workflow.
+13. Contatos básicos.
+14. Configurações.
+
+NÃO implementar agora:
+
+- marketplace;
+- pagamentos;
+- planos;
+- equipe;
+- multiusuário avançado;
+- white label;
+- analytics avançado;
+- WhatsApp;
+- Facebook;
+- TikTok;
+- Telegram;
+- CRM completo;
+- campanhas complexas;
+- construtor de chatbot gigantesco;
+- colaboração em tempo real.
+
+Essas coisas podem entrar no roadmap.
+
+==================================================
+30. ROADMAP FUTURO
+==================================================
+
+Arquitetar de maneira que seja possível adicionar:
+
+FASE 2
+- templates;
+- analytics;
+- mais gatilhos;
+- mais ações;
+- campos personalizados;
+- histórico de conversas;
+- agendamento;
+- segmentação.
+
+FASE 3
+- WhatsApp;
+- Facebook Messenger;
+- equipes;
+- permissões;
+- planos;
+- cobrança;
+- multi-tenant mais avançado.
+
+FASE 4
+- marketplace;
+- templates públicos;
+- IA mais avançada;
+- agentes especializados;
+- analytics avançado.
+
+==================================================
+31. EXPERIÊNCIA DE CONEXÃO META
+==================================================
+
+Priorize MUITO a experiência.
+
+O usuário não deve precisar entender:
+
+- tokens;
+- Graph API;
+- IDs internos;
+- webhooks;
+- endpoints.
+
+Ele deve simplesmente clicar:
+
+"Conectar Instagram"
+
+E seguir o fluxo oficial da Meta.
+
+Depois, a plataforma cuida internamente da complexidade.
+
+Se alguma etapa técnica obrigatória precisar ser configurada pelo administrador da plataforma, documente claramente isso no README e, se possível, crie uma tela de diagnóstico.
+
+==================================================
+32. DIAGNÓSTICO DE INTEGRAÇÃO
+==================================================
+
+Crie uma página ou seção simples:
+
+Instagram
+✓ Conta conectada
+✓ Token válido
+✓ Webhook configurado
+✓ Permissões verificadas
+
+ou:
+
+Instagram
+✓ Conta conectada
+✗ Webhook não configurado
+
+Problema:
+...
+
+Isso será muito importante para suporte.
+
+==================================================
+33. REGRAS PARA DESENVOLVIMENTO
+==================================================
+
+Você deve trabalhar de forma incremental.
+
+NÃO tente criar o projeto inteiro em uma única etapa sem testar.
+
+ETAPA 1:
+Analise o ambiente e requisitos.
+
+ETAPA 2:
+Apresente arquitetura proposta.
+
+ETAPA 3:
+Confirme a documentação atual da Meta.
+
+ETAPA 4:
+Crie estrutura inicial.
+
+ETAPA 5:
+Configure banco.
+
+ETAPA 6:
+Implemente autenticação.
+
+ETAPA 7:
+Implemente integração Meta/OAuth.
+
+ETAPA 8:
+Implemente webhook.
+
+ETAPA 9:
+Implemente workflow builder.
+
+ETAPA 10:
+Implemente workflow engine.
+
+ETAPA 11:
+Implemente OpenAI.
+
+ETAPA 12:
+Implemente logs.
+
+ETAPA 13:
+Implemente testes.
+
+ETAPA 14:
+Faça revisão geral.
+
+ETAPA 15:
+Prepare deploy.
+
+Após cada etapa:
+
+- execute testes;
+- corrija erros;
+- valide integração;
+- não avance deixando erros conhecidos.
+
+==================================================
+34. REGRA IMPORTANTE SOBRE A META
+==================================================
+
+Não implemente funcionalidades com base em memória antiga.
+
+Antes de escrever o código da integração:
+
+1. consulte a documentação oficial atual da Meta;
+2. identifique a API correta;
+3. identifique permissões;
+4. identifique requisitos;
+5. confirme endpoints;
+6. confirme formato dos webhooks;
+7. confirme limitações.
+
+Se houver conflito entre este prompt e a documentação oficial atual da Meta, a documentação oficial deve prevalecer.
+
+Quando algo não puder ser feito oficialmente, NÃO faça gambiarra.
+
+Informe:
+
+"Esta funcionalidade não está disponível através da API oficial atualmente."
+
+E proponha alternativa compatível.
+
+==================================================
+35. QUALIDADE DO CÓDIGO
+==================================================
+
+Prioridades:
+
+1. Funcionamento.
+2. Segurança.
+3. Clareza.
+4. Manutenibilidade.
+5. Simplicidade.
+6. Performance.
+
+Não quero:
+
+- arquitetura excessivamente complexa;
+- microserviços sem necessidade;
+- dezenas de dependências;
+- abstrações inúteis;
+- código difícil de manter;
+- funcionalidades não solicitadas.
+
+Quero código que um desenvolvedor Python/Flask consiga entender.
+
+==================================================
+36. DECISÕES TÉCNICAS
+==================================================
+
+Quando existir mais de uma alternativa:
+
+- explique rapidamente;
+- escolha uma;
+- justifique;
+- implemente.
+
+Não fique paralisado pedindo confirmação para cada pequena decisão.
+
+Porém, se uma decisão alterar significativamente a arquitetura ou o custo do projeto, explique antes de seguir.
+
+==================================================
+37. CRITÉRIO FINAL DE ACEITE
+==================================================
+
+Considerarei o MVP funcional quando for possível:
+
+1. Criar uma conta.
+2. Entrar no sistema.
+3. Conectar oficialmente um Instagram compatível.
+4. Receber um evento oficial da Meta.
+5. Criar um workflow visual.
+6. Configurar um gatilho.
+7. Adicionar uma ação.
+8. Adicionar uma condição.
+9. Utilizar OpenAI em um nó.
+10. Ativar o workflow.
+11. Disparar o workflow.
+12. Executar as ações permitidas pela API oficial.
+13. Registrar a execução.
+14. Visualizar o resultado no painel.
+15. Desativar o workflow.
+16. Desconectar o Instagram com segurança.
+
+==================================================
+38. SUA PRIMEIRA TAREFA
+==================================================
+
+NÃO comece imediatamente escrevendo centenas de arquivos.
+
+Primeiro:
+
+1. Analise este documento.
+2. Analise o ambiente/projeto existente.
+3. Identifique o que já existe.
+4. Verifique a documentação oficial atual da Meta necessária para este produto.
+5. Liste as APIs/permissões necessárias.
+6. Identifique eventuais limitações da Meta que afetem o MVP.
+7. Proponha a arquitetura.
+8. Proponha o schema inicial do Supabase.
+9. Proponha a estrutura do frontend.
+10. Proponha o fluxo OAuth.
+11. Proponha o fluxo de webhook.
+12. Proponha o fluxo de execução de workflow.
+13. Liste as variáveis de ambiente.
+14. Liste as dependências.
+15. Só depois comece a implementação.
+
+Ao implementar, mantenha o projeto executável em todas as etapas.
+
+O objetivo não é produzir muito código.
+
+O objetivo é produzir um MVP REAL, FUNCIONAL, SEGURO E EVOLUTIVO.
+
+Comece pela análise técnica e pela validação das APIs oficiais da Meta.
