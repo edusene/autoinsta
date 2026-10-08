@@ -35,8 +35,10 @@ def receive():
     if (request.content_length or 0) > MAX_BODY_BYTES:
         return "Payload too large", 413
     raw = request.get_data(cache=True)
-    if not webhook_service.verify_signature(raw, request.headers.get("X-Hub-Signature-256")):
-        logger.warning("Webhook com assinatura inválida recusado.")
+    problem = webhook_service.signature_problem(raw, request.headers.get("X-Hub-Signature-256"))
+    if problem:
+        logger.warning("Webhook recusado: %s", problem)
+        webhook_service.record_rejection(raw, problem)
         return "Invalid signature", 403
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):

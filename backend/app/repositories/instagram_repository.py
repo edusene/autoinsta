@@ -93,6 +93,11 @@ def mark_webhook_received(conn, account_id: str) -> None:
     conn.execute("update instagram_accounts set last_webhook_at = now() where id = %s", (account_id,))
 
 
+def other_ig_user_ids(conn, ig_user_id: str) -> set[str]:
+    rows = conn.execute("select ig_user_id from instagram_accounts where ig_user_id <> %s", (ig_user_id,)).fetchall()
+    return {r["ig_user_id"] for r in rows}
+
+
 def delete_by_ig_user_id(conn, ig_user_id: str) -> None:
     conn.execute("delete from instagram_accounts where ig_user_id = %s", (ig_user_id,))
 

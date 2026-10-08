@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { EventsMonitor } from '../components/EventsMonitor'
 import { ConfirmButton, ErrorAlert, Loading } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { api, errorMessage } from '../lib/api'
@@ -83,19 +84,6 @@ export function InstagramPage() {
     }
   }
 
-  // Token gerado no painel da Meta e configurado no servidor (sem passar pelo login do Instagram)
-  const connectWithServerToken = async () => {
-    setBusy(true)
-    setActionError(null)
-    try {
-      setData(await api.post<InstagramStatus>('/api/instagram/connect-token'))
-    } catch (err) {
-      setActionError(errorMessage(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const disconnect = async () => {
     setActionError(null)
     try {
@@ -108,14 +96,11 @@ export function InstagramPage() {
   if (loading && !data) return <Loading />
   const account = data?.account
   const expired = data?.status === 'token_expired'
-  const options = data?.connect_options ?? { oauth: false, server_token: false }
-  const viaServerToken = account?.connection_method === 'server_token'
-  const reconnect = viaServerToken && options.server_token ? connectWithServerToken : connect
-  const canReconnect = viaServerToken ? options.server_token : options.oauth
+  const options = data?.connect_options ?? { oauth: false }
   const expectedRedirect = `${window.location.origin}/instagram/callback`
 
   return (
-    <div className="page stack" style={{ maxWidth: 860 }}>
+    <div className="page stack" style={{ maxWidth: 1000 }}>
       <div className="page-header">
         <div>
           <h1>Instagram</h1>
@@ -141,12 +126,11 @@ export function InstagramPage() {
                 <span className="badge badge-success">Conectado</span>
                 <span>Desde {formatDateTime(account.connected_at)}</span>
                 <span>· Último evento {timeAgo(account.last_webhook_at)}</span>
-                {viaServerToken && <span>· via token do painel da Meta</span>}
               </div>
             </div>
             <span className="spacer" />
-            {canReconnect && (
-              <button className="btn" onClick={reconnect} disabled={busy}>
+            {options.oauth && (
+              <button className="btn" onClick={connect} disabled={busy}>
                 Reconectar
               </button>
             )}
@@ -165,14 +149,9 @@ export function InstagramPage() {
               </p>
             </div>
             <div className="row">
-              {options.server_token && (
-                <button className="btn btn-instagram btn-lg" onClick={connectWithServerToken} disabled={busy}>
-                  {busy ? 'Conectando…' : 'Conectar com o token do painel da Meta'}
-                </button>
-              )}
               {options.oauth && (
-                <button className={`btn btn-lg ${options.server_token ? '' : 'btn-instagram'}`} onClick={connect} disabled={busy}>
-                  {busy ? 'Abrindo Instagram…' : expired ? 'Reconectar Instagram' : 'Conectar com login do Instagram'}
+                <button className="btn btn-instagram btn-lg" onClick={connect} disabled={busy}>
+                  {busy ? 'Abrindo Instagram…' : expired ? 'Reconectar Instagram' : 'Conectar Instagram'}
                 </button>
               )}
             </div>
@@ -182,7 +161,7 @@ export function InstagramPage() {
                 <code>{expectedRedirect}</code>. Corrija a variável no servidor (Render → Environment) para o login funcionar.
               </div>
             )}
-            {!options.oauth && !options.server_token && (
+            {!options.oauth && (
               <div className="alert alert-warning">
                 A conexão com o Instagram ainda não foi configurada pelo administrador da plataforma.
               </div>
@@ -200,6 +179,7 @@ export function InstagramPage() {
       </div>
 
       {data?.account && <Diagnostics key={data.account.id + data.status} />}
+      {data?.connected && <EventsMonitor />}
     </div>
   )
 }

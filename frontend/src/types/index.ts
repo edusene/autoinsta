@@ -91,7 +91,7 @@ export interface InstagramStatus {
     connection_method: 'oauth' | 'server_token'
   }
   /** Formas de conexão disponíveis para o usuário logado (só em /api/instagram/*) */
-  connect_options?: { oauth: boolean; server_token: boolean }
+  connect_options?: { oauth: boolean }
 }
 
 export interface DiagnosticCheck {

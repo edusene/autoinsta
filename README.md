@@ -64,10 +64,8 @@ Todas as tabelas ficam com **RLS habilitado e sem policies**. Isso bloqueia a Da
 ## 3. Meta Developer App (feito uma vez pelo administrador)
 
 1. Crie um app do tipo **Business** e adicione o produto **Instagram**. Vá em **API setup with Instagram business login**.
-2. Escolha como a conta será conectada:
-   - **Opção A, token do painel (mais simples, para a sua própria conta):** em **Gerar tokens de acesso → Adicionar conta**, copie o **ID da conta** e o **token** para `INSTAGRAM_ACCOUNT_ID` e `INSTAGRAM_ACCESS_TOKEN`. Em `INSTAGRAM_TOKEN_OWNER_EMAIL`, coloque o e-mail com que você entra no AutoInsta: só esse usuário verá o botão **"Conectar com o token do painel da Meta"**. O token vale 60 dias e é renovado automaticamente.
-   - **Opção B, login do Instagram (para clientes conectarem as próprias contas):** copie o **ID** e a **chave secreta do app do Instagram** para `META_APP_ID` e `META_APP_SECRET`, e configure `META_REDIRECT_URI` (passo 3).
-   - Nas duas opções, `META_APP_SECRET` é **obrigatório para validar os webhooks**. Se o painel do Instagram não mostrar a chave secreta, use a **Chave secreta do app** em *Configurações do app → Básico*.
+2. Em **3. Set up Instagram business login → Business login settings**, copie o **ID do app do Instagram** e a **chave secreta do app do Instagram** para `META_APP_ID` e `META_APP_SECRET`.
+   - `META_APP_SECRET` é **obrigatório para validar os webhooks**. Se o painel do Instagram não mostrar a chave secreta, use a **Chave secreta do app** em *Configurações do app → Básico*.
 3. Em **Business login settings → OAuth redirect URIs**, cadastre exatamente o valor de `META_REDIRECT_URI`. Ele aponta para a rota do **frontend** `/instagram/callback`, por exemplo `https://app.seudominio.com/instagram/callback`.
 4. Em **Configure webhooks**:
    - Callback URL: `https://api.seudominio.com/webhooks/meta`. Precisa ser HTTPS com certificado válido. Em desenvolvimento, use um túnel como `ngrok http 5000`.

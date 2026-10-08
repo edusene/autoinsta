@@ -175,6 +175,7 @@ class Runtime:
     user_id: str
     account_id: str
     execution_id: str
+    dry_run: bool = False  # eventos simulados: nada é enviado ao Instagram
     _token: str | None = None
 
     def token(self) -> str:
@@ -183,7 +184,13 @@ class Runtime:
         return self._token
 
 
+# Nós que enviam algo ao Instagram (no modo simulado, apenas registram o que seria enviado)
+SENDING_NODES = {"action.send_message", "action.private_reply", "action.reply_comment"}
+
+
 def _meta_call(runtime: Runtime, fn: Callable, *args) -> dict:
+    if runtime.dry_run:
+        return {"simulated": True}
     try:
         return fn(runtime.token(), *args)
     except meta_client.MetaApiError as exc:

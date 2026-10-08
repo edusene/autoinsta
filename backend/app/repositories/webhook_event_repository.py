@@ -14,6 +14,20 @@ def insert_if_new(conn, dedupe_key: str, obj: str, field: str, ig_account_id: st
     ).fetchone()
 
 
+def list_for_account(conn, account_id: str, ig_user_id: str, limit: int) -> list[dict]:
+    return conn.execute(
+        """
+        select w.id, w.dedupe_key, w.field, w.status, w.status_reason, w.payload, w.received_at, w.processed_at,
+               (select count(*) from workflow_executions e where e.webhook_event_id = w.id) as executions
+        from webhook_events w
+        where w.instagram_account_id = %s or w.ig_account_id = %s
+        order by w.received_at desc
+        limit %s
+        """,
+        (account_id, ig_user_id, limit),
+    ).fetchall()
+
+
 def get(conn, event_id: str) -> dict | None:
     return conn.execute("select * from webhook_events where id = %s", (event_id,)).fetchone()
 

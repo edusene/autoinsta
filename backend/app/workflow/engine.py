@@ -11,7 +11,7 @@ from app.errors import AppError
 from app.repositories import execution_repository as exec_repo
 from app.repositories import workflow_repository
 from app.tasks import queue
-from app.workflow.nodes import EXECUTORS, NODE_TYPES, NodeError, Runtime
+from app.workflow.nodes import EXECUTORS, NODE_TYPES, SENDING_NODES, NodeError, Runtime
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ def _run(execution_id: str, workflow: dict, node_id: str | None, ctx: dict, step
     graph = workflow["graph"]
     nodes_by_id = {n["id"]: n for n in graph.get("nodes", [])}
     runtime = Runtime(user_id=user_id, account_id=ctx.get("_sys", {}).get("account_id", ""),
-                      execution_id=execution_id)
+                      execution_id=execution_id, dry_run=bool(ctx.get("_sys", {}).get("dry_run")))
 
     def log(node, level, message, data=None):
         with db.connection() as conn:
@@ -132,7 +132,10 @@ def _run(execution_id: str, workflow: dict, node_id: str | None, ctx: dict, step
             log(node, "error", msg)
             return finish("error", node_id, msg)
 
-        log(node, "info", result.message, result.output)
+        message = result.message
+        if runtime.dry_run and node["type"] in SENDING_NODES:
+            message += " (simulação: nada foi enviado ao Instagram)"
+        log(node, "info", message, result.output)
         if result.stop:
             return finish("success", None)
 

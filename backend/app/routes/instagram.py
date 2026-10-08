@@ -1,13 +1,20 @@
-from flask import Blueprint, g
+from flask import Blueprint
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.errors import ok
 from app.extensions import limiter
-from app.services import instagram_service
+from app.services import instagram_service, webhook_service
 from app.utils.auth import current_user_id, require_auth
-from app.utils.http import parse_body
+from app.utils.http import pagination, parse_body
 
 bp = Blueprint("instagram", __name__, url_prefix="/api/instagram")
+
+
+class SimulateBody(BaseModel):
+    kind: Literal["message", "comment"] = "message"
+    text: str = Field(min_length=1, max_length=1000)
 
 
 class CallbackBody(BaseModel):
@@ -18,7 +25,7 @@ class CallbackBody(BaseModel):
 def _status(data: dict | None = None) -> dict:
     """Status da conexão + quais formas de conectar este usuário pode usar."""
     data = data or instagram_service.get_status(current_user_id())
-    return {**data, "connect_options": instagram_service.connect_options(g.user.email)}
+    return {**data, "connect_options": instagram_service.connect_options()}
 
 
 @bp.get("/status")
@@ -42,14 +49,6 @@ def callback():
     return ok(_status(instagram_service.complete_connection(current_user_id(), body.code, body.state)))
 
 
-@bp.post("/connect-token")
-@require_auth
-@limiter.limit("10 per minute")
-def connect_token():
-    """Conecta com o token gerado no painel da Meta (configurado no servidor)."""
-    return ok(_status(instagram_service.connect_with_server_token(current_user_id(), g.user.email)))
-
-
 @bp.post("/disconnect")
 @require_auth
 def disconnect():
@@ -61,6 +60,23 @@ def disconnect():
 @limiter.limit("10 per minute")
 def resubscribe():
     return ok(_status(instagram_service.resubscribe(current_user_id())))
+
+
+@bp.get("/events")
+@require_auth
+def events():
+    """Eventos recebidos da Meta para a conta conectada + tentativas recusadas."""
+    limit, _ = pagination(default_limit=30, max_limit=100)
+    return ok(webhook_service.list_events(current_user_id(), limit))
+
+
+@bp.post("/simulate")
+@require_auth
+@limiter.limit("20 per minute")
+def simulate():
+    """Simula uma DM/comentário: roda os workflows ativos sem enviar nada ao Instagram."""
+    body = parse_body(SimulateBody)
+    return ok(webhook_service.simulate(current_user_id(), body.kind, body.text.strip()), 201)
 
 
 @bp.get("/diagnostics")

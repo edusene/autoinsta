@@ -56,12 +56,6 @@ class Config:
     # Segredos extras aceitos na assinatura X-Hub-Signature-256 (ex.: App Secret do app Meta)
     META_WEBHOOK_EXTRA_SECRETS = _list("META_WEBHOOK_EXTRA_SECRETS")
 
-    # Conexão por token gerado no painel da Meta ("Gerar tokens de acesso"), sem OAuth.
-    # Só o usuário da plataforma com INSTAGRAM_TOKEN_OWNER_EMAIL pode usar este token.
-    INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
-    INSTAGRAM_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID", "")
-    INSTAGRAM_TOKEN_OWNER_EMAIL = os.getenv("INSTAGRAM_TOKEN_OWNER_EMAIL", "").strip().lower()
-
     # Criptografia dos tokens OAuth (Fernet)
     TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY", "")
 
@@ -94,9 +88,6 @@ class TestConfig(Config):
     META_REDIRECT_URI = "http://localhost:5173/instagram/callback"
     META_VERIFY_TOKEN = "verify-me"
     META_WEBHOOK_EXTRA_SECRETS: list[str] = []
-    INSTAGRAM_ACCESS_TOKEN = ""
-    INSTAGRAM_ACCOUNT_ID = ""
-    INSTAGRAM_TOKEN_OWNER_EMAIL = ""
     TOKEN_ENCRYPTION_KEY = "rQf8bW3hVq6fJcV1lU2Hc0rIYk1C2bZgkq8n5c6n3oY="
     OPENAI_API_KEY = "sk-test-0000000000000000abcd"
     RATELIMIT_ENABLED = False

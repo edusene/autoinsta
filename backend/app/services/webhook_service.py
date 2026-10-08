@@ -9,11 +9,15 @@ import hashlib
 import hmac
 import json
 import logging
+import threading
+import uuid
+from collections import deque
 from datetime import datetime, timezone
 
 from flask import current_app
 
 from app import db
+from app.errors import AppError
 from app.repositories import contact_repository, instagram_repository, settings_repository
 from app.repositories import webhook_event_repository as event_repo
 from app.repositories import workflow_repository
@@ -32,19 +36,64 @@ def _secrets() -> list[str]:
     return [s for s in [cfg.get("META_APP_SECRET"), *cfg.get("META_WEBHOOK_EXTRA_SECRETS", [])] if s]
 
 
-def verify_signature(raw_body: bytes, header_value: str | None) -> bool:
-    """Valida X-Hub-Signature-256 (HMAC-SHA256 do corpo bruto com o app secret)."""
+def signature_problem(raw_body: bytes, header_value: str | None) -> str | None:
+    """Valida X-Hub-Signature-256 (HMAC-SHA256 do corpo bruto). Retorna o motivo da recusa ou None."""
     if not _secrets():
         logger.error("Webhook recusado: nenhum segredo configurado (defina META_APP_SECRET).")
-        return False
+        return "Nenhuma chave secreta configurada no servidor (META_APP_SECRET)."
     if not header_value or not header_value.startswith("sha256="):
-        return False
+        return "Requisição sem assinatura X-Hub-Signature-256."
     received = header_value.removeprefix("sha256=").strip()
     for secret in _secrets():
         expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
         if hmac.compare_digest(expected, received):
-            return True
-    return False
+            return None
+    return "Assinatura não confere com nenhuma chave secreta configurada."
+
+
+def verify_signature(raw_body: bytes, header_value: str | None) -> bool:
+    return signature_problem(raw_body, header_value) is None
+
+
+# Tentativas recusadas ficam só em memória (diagnóstico): não gravamos no banco dados
+# que não sabemos se vieram da Meta.
+_REJECTIONS: deque[dict] = deque(maxlen=50)
+_REJECTIONS_LOCK = threading.Lock()
+
+
+def record_rejection(raw_body: bytes, reason: str) -> None:
+    accounts, fields = set(), set()
+    try:
+        payload = json.loads(raw_body)
+        for entry in payload.get("entry") or []:
+            if isinstance(entry, dict):
+                accounts.add(str(entry.get("id", "")))
+                if entry.get("messaging"):
+                    fields.add("messages")
+                for change in entry.get("changes") or []:
+                    if isinstance(change, dict):
+                        fields.add(str(change.get("field", ""))[:40])
+    except (ValueError, AttributeError, TypeError):
+        pass
+    with _REJECTIONS_LOCK:
+        _REJECTIONS.append({
+            "received_at": datetime.now(timezone.utc).isoformat(),
+            "reason": reason,
+            "ig_account_ids": sorted(a for a in accounts if a)[:5],
+            "fields": sorted(f for f in fields if f)[:5],
+        })
+
+
+def recent_rejections(ig_user_id: str, other_ig_ids: set[str]) -> list[dict]:
+    """Recusas desta conta ou sem conta reconhecida (ex.: eventos de teste da Meta)."""
+    with _REJECTIONS_LOCK:
+        items = list(_REJECTIONS)
+    visible = [
+        {k: v for k, v in r.items() if k != "ig_account_ids"}
+        for r in items
+        if ig_user_id in r["ig_account_ids"] or not (set(r["ig_account_ids"]) & other_ig_ids)
+    ]
+    return list(reversed(visible))
 
 
 def parse_signed_request(signed_request: str) -> dict | None:
@@ -155,11 +204,13 @@ def process_event(event_id: str) -> None:
 
     item = event["payload"]
     user_id = str(account["user_id"])
+    simulated = is_simulated(event)
     ctx: dict = {
-        "trigger": {"received_at": datetime.now(timezone.utc).isoformat()},
+        "trigger": {"received_at": datetime.now(timezone.utc).isoformat(), "simulated": simulated},
         "vars": {},
         "ai": {},
-        "_sys": {"account_id": str(account["id"])},
+        # dry_run: ações que enviariam algo ao Instagram são apenas registradas
+        "_sys": {"account_id": str(account["id"]), "dry_run": simulated},
     }
 
     if event["field"] == "messages":
@@ -209,7 +260,7 @@ def process_event(event_id: str) -> None:
         event_repo.set_status(conn, event_id, "processed", f"{len(workflows)} workflow(s) compatível(is).",
                               str(account["id"]), user_id)
 
-    if trigger_type == MESSAGE_TRIGGER:
+    if trigger_type == MESSAGE_TRIGGER and not simulated:
         contact = _enrich_contact(account, contact)
     ctx["contact"] = {"id": str(contact["id"]), "ig_id": contact_igsid,
                       "username": contact.get("username") or "", "name": contact.get("name") or ""}
@@ -230,6 +281,72 @@ def process_event(event_id: str) -> None:
             engine.start(workflow, json.loads(json.dumps(ctx)), trigger_event, str(contact["id"]), str(event_id))
         except Exception:  # noqa: BLE001 - um workflow com problema não bloqueia os outros
             logger.exception("Falha ao iniciar workflow %s para o evento %s", workflow["id"], event_id)
+
+
+SIMULATION_PREFIX = "sim:"
+SIMULATED_SENDER_ID = "simulado"
+
+
+def is_simulated(event: dict) -> bool:
+    # A chave de deduplicação é gerada pelo servidor: um payload externo não consegue forjá-la.
+    return str(event.get("dedupe_key", "")).startswith(SIMULATION_PREFIX)
+
+
+def simulate(user_id: str, kind: str, text: str) -> dict:
+    """Cria um evento de teste para a conta do usuário e processa como se viesse da Meta (sem enviar nada)."""
+    with db.connection() as conn:
+        account = instagram_repository.get_connected_for_user(conn, user_id)
+    if not account:
+        raise AppError("INSTAGRAM_NOT_CONNECTED", "Conecte o Instagram antes de simular eventos.", 409)
+    sim_id = uuid.uuid4().hex[:12]
+    if kind == "comment":
+        field = "comments"
+        item = {"from": {"id": SIMULATED_SENDER_ID, "username": "teste_simulado"}, "id": f"sim-comment-{sim_id}",
+                "text": text, "media": {"id": "simulado", "media_product_type": "FEED"}}
+    else:
+        field = "messages"
+        item = {"sender": {"id": SIMULATED_SENDER_ID}, "recipient": {"id": account["ig_user_id"]},
+                "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+                "message": {"mid": f"sim-mid-{sim_id}", "text": text}}
+    with db.connection() as conn:
+        row = event_repo.insert_if_new(conn, f"{SIMULATION_PREFIX}{sim_id}", "instagram", field,
+                                       account["ig_user_id"], item)
+        queue.enqueue(conn, "process_webhook_event", {"event_id": str(row["id"])})
+    logger.info("Evento simulado criado: %s (%s) user=%s", row["id"], field, user_id)
+    return {"event_id": str(row["id"]), "field": field}
+
+
+def _summarize(event: dict) -> dict:
+    item = event["payload"] or {}
+    if event["field"] == "messages":
+        message = item.get("message") or {}
+        return {"text": (message.get("text") or "")[:300], "from": (item.get("sender") or {}).get("id"),
+                "is_echo": bool(message.get("is_echo")), "has_attachments": bool(message.get("attachments"))}
+    if event["field"] == "comments":
+        sender = item.get("from") or {}
+        return {"text": (item.get("text") or "")[:300], "from": sender.get("username") or sender.get("id"),
+                "media_id": (item.get("media") or {}).get("id")}
+    return {}
+
+
+def list_events(user_id: str, limit: int) -> dict:
+    """Eventos recebidos para a conta do usuário + tentativas recusadas (diagnóstico)."""
+    with db.connection() as conn:
+        account = instagram_repository.get_for_user(conn, user_id)
+        if not account:
+            return {"account": None, "events": [], "rejections": []}
+        rows = event_repo.list_for_account(conn, str(account["id"]), account["ig_user_id"], limit)
+        others = instagram_repository.other_ig_user_ids(conn, account["ig_user_id"])
+    events = [{
+        "id": str(r["id"]), "field": r["field"], "status": r["status"], "status_reason": r["status_reason"],
+        "received_at": r["received_at"], "processed_at": r["processed_at"], "executions": r["executions"],
+        "simulated": is_simulated(r), **_summarize(r),
+    } for r in rows]
+    return {
+        "account": {"username": account["username"], "last_webhook_at": account["last_webhook_at"]},
+        "events": events,
+        "rejections": recent_rejections(account["ig_user_id"], others),
+    }
 
 
 def _trigger_config(workflow: dict) -> dict:
