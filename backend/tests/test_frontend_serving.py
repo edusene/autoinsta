@@ -20,7 +20,7 @@ def test_public_config_exposes_only_public_values(client):
 
 
 def test_serves_index_and_spa_routes(client, dist):
-    for path in ("/", "/dashboard", "/privacy", "/workflows/123", "/instagram/callback?code=x&state=y"):
+    for path in ("/", "/dashboard", "/privacy", "/terms", "/workflows/123", "/instagram/callback?code=x&state=y"):
         resp = client.get(path)
         assert resp.status_code == 200, path
         assert b"painel" in resp.data

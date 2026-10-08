@@ -200,5 +200,5 @@ pre.json { margin: 6px 0 0; background: var(--surface-2); border-radius: 6px; pa
 .react-flow__handle.handle-false { background: var(--danger); }
 
 /* ---------- política de privacidade ---------- */
-.privacy ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
-.privacy p { color: var(--text); }
+.legal ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.legal p { color: var(--text); }

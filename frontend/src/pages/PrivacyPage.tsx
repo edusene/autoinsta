@@ -1,43 +1,11 @@
-import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
-import { privacyContactEmail } from '../lib/supabase'
-
-const UPDATED_AT = '08/10/2026'
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="stack" style={{ gap: 8 }}>
-      <h2>{title}</h2>
-      {children}
-    </section>
-  )
-}
+import { ContactEmail, LegalShell, Section } from '../components/LegalShell'
 
 /** Página pública exigida pela Meta (URL da Política de Privacidade do app). */
 export function PrivacyPage() {
-  const contact = privacyContactEmail ? (
-    <strong>{privacyContactEmail}</strong>
-  ) : (
-    <em>o e-mail de contato indicado pelo responsável pela plataforma</em>
-  )
+  const contact = <ContactEmail />
 
   return (
-    <div className="auth-page" style={{ placeItems: 'start center' }}>
-      <article className="card" style={{ maxWidth: 820, width: '100%', margin: '24px 0' }}>
-        <div className="card-body stack privacy" style={{ gap: 22, lineHeight: 1.65, padding: '32px 36px' }}>
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <div className="brand" style={{ padding: 0 }}>
-              <span className="brand-logo">A</span>
-              AutoInsta
-            </div>
-            <Link to="/login" className="small">Acessar a plataforma</Link>
-          </div>
-
-          <div>
-            <h1>Política de Privacidade</h1>
-            <p className="muted small" style={{ marginTop: 4 }}>Última atualização: {UPDATED_AT}</p>
-          </div>
-
+    <LegalShell title="Política de Privacidade">
           <p>
             O AutoInsta é uma plataforma que permite a contas profissionais do Instagram automatizar respostas a
             mensagens diretas e comentários, usando exclusivamente as APIs oficiais da Meta. Esta política explica quais
@@ -132,8 +100,6 @@ export function PrivacyPage() {
           <Section title="9. Alterações">
             <p>Podemos atualizar esta política. A data da última atualização fica sempre indicada no topo desta página.</p>
           </Section>
-        </div>
-      </article>
-    </div>
+    </LegalShell>
   )
 }

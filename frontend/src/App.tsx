@@ -10,6 +10,7 @@ import { InstagramCallbackPage, InstagramPage } from './pages/InstagramPage'
 import { LogsPage } from './pages/LogsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { DataDeletionPage, SettingsPage } from './pages/SettingsPage'
+import { TermsPage } from './pages/TermsPage'
 import { NewWorkflowPage, WorkflowsPage } from './pages/WorkflowsPage'
 
 const WorkflowEditorPage = lazy(() => import('./workflow/WorkflowEditor').then((m) => ({ default: m.WorkflowEditorPage })))
@@ -32,6 +33,8 @@ export default function App() {
           <Route path="/data-deletion" element={<DataDeletionPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/politica-de-privacidade" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/termos-de-uso" element={<TermsPage />} />
           {/* Editor ocupa a tela toda (sem sidebar) */}
           <Route path="/workflows/:id" element={<RequireAuth><Suspense fallback={<Loading />}><WorkflowEditorPage /></Suspense></RequireAuth>} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>

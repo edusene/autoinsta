@@ -81,7 +81,7 @@ export function LoginPage() {
           Não tem conta? <Link to="/register">Criar conta</Link>
         </p>
         <p className="muted small" style={{ textAlign: 'center' }}>
-          <Link to="/privacy">Política de Privacidade</Link>
+          <Link to="/terms">Termos de Uso</Link> · <Link to="/privacy">Política de Privacidade</Link>
         </p>
       </form>
     </AuthShell>
@@ -157,7 +157,8 @@ export function RegisterPage() {
           Já tem conta? <Link to="/login">Entrar</Link>
         </p>
         <p className="muted small" style={{ textAlign: 'center' }}>
-          Ao criar a conta, você concorda com a <Link to="/privacy">Política de Privacidade</Link>.
+          Ao criar a conta, você concorda com os <Link to="/terms">Termos de Uso</Link> e a{' '}
+          <Link to="/privacy">Política de Privacidade</Link>.
         </p>
       </form>
     </AuthShell>

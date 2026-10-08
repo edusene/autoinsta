@@ -102,6 +102,24 @@ export function SettingsPage() {
       )}
 
       <div className="card">
+        <div className="card-header"><h2>Documentos legais</h2></div>
+        <div className="card-body stack small">
+          {[
+            ['Política de Privacidade', '/privacy'],
+            ['Termos de Uso', '/terms'],
+          ].map(([label, path]) => (
+            <div key={path} className="row" style={{ justifyContent: 'space-between' }}>
+              <a href={path} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 550 }}>
+                {label} ↗
+              </a>
+              <code>{window.location.origin}{path}</code>
+            </div>
+          ))}
+          <div className="muted">Use esses endereços no painel da Meta (Configurações do app → Básico).</div>
+        </div>
+      </div>
+
+      <div className="card">
         <div className="card-header"><h2>Sistema</h2></div>
         <div className="card-body stack small">
           <div><span className="muted">API:</span> <code>{apiBase}</code></div>
