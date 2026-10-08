@@ -8,6 +8,7 @@ import { ContactsPage } from './pages/ContactsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { InstagramCallbackPage, InstagramPage } from './pages/InstagramPage'
 import { LogsPage } from './pages/LogsPage'
+import { PrivacyPage } from './pages/PrivacyPage'
 import { DataDeletionPage, SettingsPage } from './pages/SettingsPage'
 import { NewWorkflowPage, WorkflowsPage } from './pages/WorkflowsPage'
 
@@ -29,6 +30,8 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/data-deletion" element={<DataDeletionPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/politica-de-privacidade" element={<PrivacyPage />} />
           {/* Editor ocupa a tela toda (sem sidebar) */}
           <Route path="/workflows/:id" element={<RequireAuth><Suspense fallback={<Loading />}><WorkflowEditorPage /></Suspense></RequireAuth>} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>

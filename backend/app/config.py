@@ -41,6 +41,9 @@ class Config:
     # Chave PÚBLICA (publishable/anon), entregue ao painel em /api/public-config
     SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 
+    # Exibido publicamente na Política de Privacidade (/privacy)
+    PRIVACY_CONTACT_EMAIL = os.getenv("PRIVACY_CONTACT_EMAIL", "")
+
     # Painel compilado (frontend/dist), servido pelo próprio Flask
     FRONTEND_DIST = os.getenv("FRONTEND_DIST", str(ROOT_DIR / "frontend" / "dist"))
 
@@ -79,6 +82,7 @@ class TestConfig(Config):
     SUPABASE_URL = "https://test.supabase.co"
     SUPABASE_JWT_SECRET = "test-jwt-secret-with-at-least-32-bytes!!"
     SUPABASE_ANON_KEY = "sb_publishable_test"
+    PRIVACY_CONTACT_EMAIL = "privacidade@example.com"
     META_APP_ID = "123"
     META_APP_SECRET = "meta-test-secret"
     META_REDIRECT_URI = "http://localhost:5173/instagram/callback"

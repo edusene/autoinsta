@@ -15,11 +15,12 @@ def dist(app, tmp_path):
 
 def test_public_config_exposes_only_public_values(client):
     data = client.get("/api/public-config").get_json()["data"]
-    assert data == {"supabase_url": "https://test.supabase.co", "supabase_anon_key": "sb_publishable_test"}
+    assert data == {"supabase_url": "https://test.supabase.co", "supabase_anon_key": "sb_publishable_test",
+                    "privacy_contact_email": "privacidade@example.com"}
 
 
 def test_serves_index_and_spa_routes(client, dist):
-    for path in ("/", "/dashboard", "/workflows/123", "/instagram/callback?code=x&state=y"):
+    for path in ("/", "/dashboard", "/privacy", "/workflows/123", "/instagram/callback?code=x&state=y"):
         resp = client.get(path)
         assert resp.status_code == 200, path
         assert b"painel" in resp.data

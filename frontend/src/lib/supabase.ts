@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 // assim o painel não precisa de variáveis de ambiente próprias.
 export let supabase: SupabaseClient
 export let supabaseConfigured = false
+export let privacyContactEmail = ''
 
 export async function initSupabase(): Promise<void> {
   let url = ''
@@ -13,6 +14,7 @@ export async function initSupabase(): Promise<void> {
     const json = await res.json()
     url = json?.data?.supabase_url ?? ''
     key = json?.data?.supabase_anon_key ?? ''
+    privacyContactEmail = json?.data?.privacy_contact_email ?? ''
   } catch {
     // API indisponível: o login mostra o aviso de configuração
   }

@@ -22,7 +22,11 @@ BACKEND_PREFIXES = ("api/", "webhooks/", "health")
 def public_config():
     """Somente valores PÚBLICOS (seguros no navegador)."""
     cfg = current_app.config
-    return ok({"supabase_url": cfg["SUPABASE_URL"], "supabase_anon_key": cfg["SUPABASE_ANON_KEY"]})
+    return ok({
+        "supabase_url": cfg["SUPABASE_URL"],
+        "supabase_anon_key": cfg["SUPABASE_ANON_KEY"],
+        "privacy_contact_email": cfg["PRIVACY_CONTACT_EMAIL"],
+    })
 
 
 @bp.get("/", defaults={"path": ""})
