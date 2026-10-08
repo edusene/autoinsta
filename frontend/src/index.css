@@ -262,3 +262,9 @@ pre.json { margin: 6px 0 0; background: var(--surface-2); border-radius: 6px; pa
 .segmented button { border: 0; background: transparent; color: var(--text-2); font: inherit; font-weight: 500; padding: 6px 14px; border-radius: 7px; cursor: pointer; }
 .segmented button:hover { color: var(--text); }
 .segmented button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+
+/* ---------- modelos de workflow ---------- */
+.template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.template-card { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.template-card:hover { border-color: var(--accent); background: var(--palette-hover); }
+.template-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

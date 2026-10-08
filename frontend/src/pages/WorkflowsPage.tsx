@@ -5,6 +5,7 @@ import { useApi } from '../hooks/useApi'
 import { api, ApiError, errorMessage } from '../lib/api'
 import { formatDateTime, TRIGGER_LABELS } from '../lib/format'
 import type { Workflow, WorkflowSummary } from '../types'
+import { WORKFLOW_TEMPLATES, type WorkflowTemplate } from '../workflow/templates'
 
 export function WorkflowsPage() {
   const { data, error, loading, reload } = useApi<WorkflowSummary[]>('/api/workflows')
@@ -135,15 +136,29 @@ export function NewWorkflowPage() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [templateId, setTemplateId] = useState('blank')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const chooseTemplate = (t: WorkflowTemplate) => {
+    setTemplateId(t.id)
+    if (t.graph) {
+      if (!name.trim()) setName(t.name)
+      if (!description.trim()) setDescription(t.description)
+    }
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setBusy(true)
     setError(null)
     try {
-      const wf = await api.post<Workflow>('/api/workflows', { name: name.trim(), description: description.trim() || null })
+      const template = WORKFLOW_TEMPLATES.find((t) => t.id === templateId)
+      const wf = await api.post<Workflow>('/api/workflows', {
+        name: name.trim(),
+        description: description.trim() || null,
+        graph: template?.graph ?? null,
+      })
       navigate(`/workflows/${wf.id}`, { replace: true })
     } catch (err) {
       setError(errorMessage(err))
@@ -152,12 +167,25 @@ export function NewWorkflowPage() {
   }
 
   return (
-    <div className="page" style={{ maxWidth: 560 }}>
+    <div className="page" style={{ maxWidth: 720 }}>
       <div className="page-header">
         <h1>Novo workflow</h1>
       </div>
       <form className="card card-body stack" onSubmit={submit}>
         <ErrorAlert message={error} />
+        <div className="field">
+          <label>Modelo</label>
+          <div className="template-grid" role="radiogroup" aria-label="Modelo">
+            {WORKFLOW_TEMPLATES.map((t) => (
+              <button key={t.id} type="button" role="radio" aria-checked={templateId === t.id}
+                className={`template-card ${templateId === t.id ? 'active' : ''}`} onClick={() => chooseTemplate(t)}>
+                <strong>{t.name}</strong>
+                <span className="small muted">{t.description}</span>
+              </button>
+            ))}
+          </div>
+          <span className="help">Modelos com IA exigem a OpenAI configurada. Revise os textos no editor antes de ativar.</span>
+        </div>
         <div className="field">
           <label htmlFor="name">Nome</label>
           <input id="name" className="input" required maxLength={120} autoFocus value={name}
