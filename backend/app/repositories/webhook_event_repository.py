@@ -57,3 +57,26 @@ def count_recent_for_account(conn, account_id: str, hours: int = 24) -> int:
            where instagram_account_id = %s and received_at > now() - make_interval(hours => %s)""",
         (account_id, hours),
     ).fetchone()["n"]
+
+
+# --- recusas (diagnóstico) -----------------------------------------------------
+
+def add_rejection(conn, reason: str, ig_account_ids: list[str], fields: list[str], has_signature: bool,
+                  body_sha256: str, keep: int) -> None:
+    conn.execute(
+        """insert into webhook_rejections (reason, ig_account_ids, fields, has_signature, body_sha256)
+           values (%s, %s, %s, %s, %s)""",
+        (reason, ig_account_ids, fields, has_signature, body_sha256),
+    )
+    # Mantém só as mais recentes (evita crescimento indefinido com requisições falsas)
+    conn.execute(
+        "delete from webhook_rejections where id <= (select max(id) from webhook_rejections) - %s", (keep,)
+    )
+
+
+def recent_rejections(conn, days: int, limit: int) -> list[dict]:
+    return conn.execute(
+        """select reason, ig_account_ids, fields, has_signature, received_at from webhook_rejections
+           where received_at > now() - make_interval(days => %s) order by id desc limit %s""",
+        (days, limit),
+    ).fetchall()

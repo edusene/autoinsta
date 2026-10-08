@@ -38,7 +38,7 @@ def receive():
     problem = webhook_service.signature_problem(raw, request.headers.get("X-Hub-Signature-256"))
     if problem:
         logger.warning("Webhook recusado: %s", problem)
-        webhook_service.record_rejection(raw, problem)
+        webhook_service.record_rejection(raw, problem, bool(request.headers.get("X-Hub-Signature-256")))
         return "Invalid signature", 403
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):

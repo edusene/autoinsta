@@ -9,9 +9,7 @@ import hashlib
 import hmac
 import json
 import logging
-import threading
 import uuid
-from collections import deque
 from datetime import datetime, timezone
 
 from flask import current_app
@@ -55,13 +53,12 @@ def verify_signature(raw_body: bytes, header_value: str | None) -> bool:
     return signature_problem(raw_body, header_value) is None
 
 
-# Tentativas recusadas ficam só em memória (diagnóstico): não gravamos no banco dados
-# que não sabemos se vieram da Meta.
-_REJECTIONS: deque[dict] = deque(maxlen=50)
-_REJECTIONS_LOCK = threading.Lock()
+# Tentativas recusadas: gravamos só metadados (nunca o corpo), para diagnóstico.
+# Sobrevivem a reinícios do servidor; a tabela guarda apenas as mais recentes.
+MAX_STORED_REJECTIONS = 500
 
 
-def record_rejection(raw_body: bytes, reason: str) -> None:
+def record_rejection(raw_body: bytes, reason: str, has_signature: bool) -> None:
     accounts, fields = set(), set()
     try:
         payload = json.loads(raw_body)
@@ -75,25 +72,26 @@ def record_rejection(raw_body: bytes, reason: str) -> None:
                         fields.add(str(change.get("field", ""))[:40])
     except (ValueError, AttributeError, TypeError):
         pass
-    with _REJECTIONS_LOCK:
-        _REJECTIONS.append({
-            "received_at": datetime.now(timezone.utc).isoformat(),
-            "reason": reason,
-            "ig_account_ids": sorted(a for a in accounts if a)[:5],
-            "fields": sorted(f for f in fields if f)[:5],
-        })
+    try:
+        with db.connection() as conn:
+            event_repo.add_rejection(
+                conn, reason, sorted(a[:40] for a in accounts if a)[:5], sorted(f for f in fields if f)[:5],
+                has_signature, hashlib.sha256(raw_body).hexdigest(), MAX_STORED_REJECTIONS,
+            )
+    except Exception:  # noqa: BLE001 - diagnóstico nunca pode derrubar a resposta à Meta
+        logger.exception("Não foi possível registrar a recusa do webhook.")
 
 
 def recent_rejections(ig_user_id: str, other_ig_ids: set[str]) -> list[dict]:
-    """Recusas desta conta ou sem conta reconhecida (ex.: eventos de teste da Meta)."""
-    with _REJECTIONS_LOCK:
-        items = list(_REJECTIONS)
-    visible = [
-        {k: v for k, v in r.items() if k != "ig_account_ids"}
-        for r in items
+    """Recusas dos últimos 7 dias desta conta ou sem conta reconhecida (ex.: eventos de teste da Meta)."""
+    with db.connection() as conn:
+        rows = event_repo.recent_rejections(conn, days=7, limit=50)
+    return [
+        {"received_at": r["received_at"], "reason": r["reason"], "fields": r["fields"],
+         "has_signature": r["has_signature"]}
+        for r in rows
         if ig_user_id in r["ig_account_ids"] or not (set(r["ig_account_ids"]) & other_ig_ids)
     ]
-    return list(reversed(visible))
 
 
 def parse_signed_request(signed_request: str) -> dict | None:

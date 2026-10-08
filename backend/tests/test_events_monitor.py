@@ -2,7 +2,6 @@
 import json
 
 from app import db
-from app.services import webhook_service
 from tests.helpers import dm_graph_with_condition
 from tests.test_webhooks_and_engine import IG_ACCOUNT, create_active, dm_payload, drain_jobs, post_webhook
 
@@ -19,7 +18,6 @@ def test_events_list_shows_received_dm(client, user, connected_account, meta_moc
 
 
 def test_rejected_signature_is_recorded_and_flagged_in_diagnostics(client, user, connected_account, meta_mock):
-    webhook_service._REJECTIONS.clear()
     body = json.dumps(dm_payload("oi")).encode()
     resp = client.post("/webhooks/meta", data=body, content_type="application/json",
                        headers={"X-Hub-Signature-256": "sha256=errada"})
@@ -33,11 +31,9 @@ def test_rejected_signature_is_recorded_and_flagged_in_diagnostics(client, user,
     checks = {c["key"]: c for c in user.get("/api/instagram/diagnostics").get_json()["data"]["checks"]}
     assert checks["webhook_signature"]["status"] == "error"
     assert "META_WEBHOOK_EXTRA_SECRETS" in checks["webhook_signature"]["detail"]
-    webhook_service._REJECTIONS.clear()
 
 
 def test_rejections_of_other_accounts_are_hidden(client, user, other_user, connected_account):
-    webhook_service._REJECTIONS.clear()
     with db.connection() as conn:
         conn.execute("insert into profiles (id, email) values (%s, %s) on conflict do nothing",
                      (other_user.id, other_user.email))
@@ -48,7 +44,6 @@ def test_rejections_of_other_accounts_are_hidden(client, user, other_user, conne
     client.post("/webhooks/meta", data=json.dumps(payload).encode(), content_type="application/json",
                 headers={"X-Hub-Signature-256": "sha256=errada"})
     assert user.get("/api/instagram/events").get_json()["data"]["rejections"] == []
-    webhook_service._REJECTIONS.clear()
 
 
 def test_simulated_dm_runs_workflow_without_sending(client, user, connected_account, meta_mock, openai_mock):

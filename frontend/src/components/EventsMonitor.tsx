@@ -100,8 +100,7 @@ export function EventsMonitor() {
       {data && data.rejections.length > 0 && (
         <div className="card-body">
           <div className="alert alert-error">
-            <strong>{data.rejections.length} evento(s) recusado(s) pela verificação de assinatura</strong> (desde o último
-            deploy). Último: {formatDateTime(data.rejections[0].received_at)}: {data.rejections[0].reason}
+            <strong>{data.rejections.length} evento(s) recusado(s) pela verificação de assinatura</strong> nos últimos 7 dias. Último: {formatDateTime(data.rejections[0].received_at)}: {data.rejections[0].reason}
             <div style={{ marginTop: 6 }}>
               A Meta pode assinar os eventos com a <strong>Chave secreta do app</strong> (Configurações do app → Básico). Coloque esse
               valor em <code>META_WEBHOOK_EXTRA_SECRETS</code> no servidor e mande uma nova DM.

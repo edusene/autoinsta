@@ -18,6 +18,7 @@ from migrate import apply_migrations
 TABLES = [
     "workflow_execution_logs", "workflow_executions", "contact_events", "contacts", "webhook_events",
     "oauth_tokens", "instagram_accounts", "workflows", "user_settings", "jobs", "profiles",
+    "webhook_rejections",
 ]
 
 

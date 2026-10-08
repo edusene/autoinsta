@@ -294,7 +294,7 @@ def diagnostics(user_id: str) -> dict:
         rejected = webhook_service.recent_rejections(account["ig_user_id"], others)
         if rejected:
             add("webhook_signature", "Assinatura dos eventos", False,
-                f"{len(rejected)} evento(s) recusado(s) desde o último deploy: {rejected[0]['reason']} "
+                f"{len(rejected)} evento(s) recusado(s) nos últimos 7 dias: {rejected[0]['reason']} "
                 "Se a Meta assina com outra chave, coloque a \"Chave secreta do app\" (Configurações do app → "
                 "Básico) em META_WEBHOOK_EXTRA_SECRETS no servidor.")
 
