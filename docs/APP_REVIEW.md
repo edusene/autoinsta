@@ -105,7 +105,37 @@ A Meta exige: (1) mostrar a conta profissional se conectando; (2) mostrar dados 
 
 ### Descreva como seu aplicativo usa esta permissão
 
-> Businesses use AutoInsta to answer Instagram Direct messages automatically. After connecting their account, the business owner creates an automation workflow in a visual editor (for example: if the message contains "price", reply with the price list; otherwise generate a short reply with AI) and activates it. When a customer sends a Direct message to the business account, we receive the "messages" webhook, run the workflow and send the reply with the Instagram Messaging API only to the person who messaged the business, within the 24-hour standard messaging window. We never start conversations, never send unsolicited or promotional messages, and ignore echoes of our own messages to avoid loops. The business owner can see every received message and every reply in the "Received events" monitor and in the execution logs, and can deactivate any automation or disconnect the account at any time.
+Troque `REVIEWER_EMAIL`/`REVIEWER_PASSWORD` pela conta de revisor do AutoInsta.
+
+```
+HOW WE USE IT
+AutoInsta is a customer-service automation and lightweight CRM tool for Instagram professional accounts. We use instagram_business_manage_messages to (1) receive the Direct messages that customers send to the connected business account through the "messages" webhook, and (2) reply to those customers automatically through the Instagram Messaging API, according to rules the business owner configures in a visual workflow editor (for example: if the message contains "price", send the price list; otherwise generate a short, polite answer with AI).
+
+Every incoming message is shown to the business owner in the "Eventos recebidos" (Received events) monitor, the sender is saved as a contact in our CRM ("Contatos" page, with interaction history), and every automated reply is recorded step by step in the execution logs ("Logs" page), so the owner always sees what was received and what was answered.
+
+VALUE FOR THE USER
+Small businesses and creators receive many repeated questions by Direct (prices, opening hours, links, availability) and often take hours to answer, losing sales. AutoInsta answers these customers within seconds, 24/7, with the business's own content, while keeping the full conversation history organized per customer for follow-up.
+
+WHY IT IS NECESSARY
+Without this permission the app cannot receive Direct messages nor send replies, so the core feature of the product (automatic replies to customer messages) would not work at all.
+
+LIMITS WE RESPECT
+We only reply to people who messaged the business first, inside the 24-hour standard messaging window. We never start conversations, never send unsolicited or promotional messages, and ignore echo events of our own replies to avoid loops. The owner can deactivate any automation or disconnect the account at any time. Message data is not sold or shared; text is sent to OpenAI only when the owner adds an AI step, and only the text configured in that step. instagram_business_basic is included in this submission as a dependent permission.
+
+APP CREDENTIALS (AutoInsta account for the reviewer, not an Instagram account)
+URL: https://autoinsta-avbp.onrender.com/login
+Email: REVIEWER_EMAIL
+Password: REVIEWER_PASSWORD
+The interface is in Portuguese; English translations are given in parentheses. The server may take up to 60 seconds to load the first time.
+
+HOW TO TEST
+1) Log in and click "Instagram" > "Conectar Instagram" (Connect Instagram); authorize your test Instagram professional account.
+2) Click "Workflows" > "+ Novo workflow" (New workflow), select the template "Palavra-chave + IA" (Keyword + AI), click "Criar e abrir editor" (Create and open editor) and then "Salvar e ativar" (Save and activate).
+3) From a different Instagram account, send a Direct message containing "preço" (price) to the connected account. An automatic reply arrives within a few seconds. Send another message without that word to receive the AI reply.
+4) In AutoInsta, open "Instagram" and scroll to "Eventos recebidos" (Received events) to see the message with status "Processado" (Processed).
+5) Open "Logs" and click the execution to see each step: trigger, condition, reply sent.
+6) Open "Contatos" (Contacts) to see the customer saved with the interaction history.
+```
 
 ### Roteiro do vídeo (2–3 min)
 
@@ -119,7 +149,7 @@ A Meta exige: (1) mostrar a conta profissional se conectando; (2) mostrar dados 
 | 11 | Mostrar a **resposta automática** chegando na conversa do cliente | *"AutoInsta replies automatically within seconds (instagram_business_manage_messages)."* |
 | 12 | No AutoInsta: **Instagram → Eventos recebidos**: a DM com status **Processado** | *"The received message appears in the events monitor."* |
 | 13 | **Logs** → abrir a execução: Gatilho → Condição → Mensagem enviada | *"The execution log shows each step and the reply sent."* |
-| 14 | Voltar em **Workflows** → **Desativar** | *"The owner can deactivate the automation at any time."* |
+| 14 | **Contatos** → clicar no cliente: histórico da interação | *"The customer is saved in the CRM with the conversation history."* |
 
 ---
 
