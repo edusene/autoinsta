@@ -56,17 +56,48 @@ Pedir permissão sem uso demonstrado no vídeo leva à recusa.
 
 ### Descreva como seu aplicativo usa esta permissão
 
-> AutoInsta is a customer-service automation tool for Instagram professional accounts. A business owner connects their own Instagram professional account through Business Login for Instagram. We use instagram_business_basic to read the connected account's user ID, username, name, account type and profile picture. We use this data to: (1) show the business owner which account is connected (username and profile picture on the Instagram page of the dashboard); (2) confirm that the account is a professional account (Business or Creator) before enabling automations; (3) match incoming webhook notifications to the correct business by the account's user ID; and (4) refresh the long-lived access token before it expires. We only access data of the account that the business owner explicitly connected. The data is stored encrypted, is never sold or shared, and is deleted when the owner disconnects the account or requests data deletion.
+Atende às "Instructions for Developers" da Meta: credenciais do app, onde ver o perfil e permissão dependente. Troque `REVIEWER_EMAIL`/`REVIEWER_PASSWORD` pela conta de revisor criada no AutoInsta. **Não** informe credenciais do Instagram.
+
+```
+HOW WE USE IT
+AutoInsta is a customer-service automation tool for Instagram professional accounts. A business owner connects their own Instagram professional account through Business Login for Instagram. We use instagram_business_basic to read the connected account's user ID, username, name, account type and profile picture in order to: (1) show the business owner which account is connected (username and profile picture); (2) confirm the account is a professional account (Business or Creator) before enabling automations; (3) match incoming webhook notifications to the correct business by the account's user ID; and (4) refresh the long-lived access token. We only access the account the owner explicitly connected. Data is stored encrypted, never sold or shared, and deleted when the owner disconnects or requests data deletion.
+
+DEPENDENT PERMISSION
+We are also requesting instagram_business_basic as a dependent permission for instagram_business_manage_messages and instagram_business_manage_comments, which are part of this same submission.
+
+APP CREDENTIALS (AutoInsta account for the reviewer, not an Instagram account)
+URL: https://autoinsta-avbp.onrender.com/login
+Email: REVIEWER_EMAIL
+Password: REVIEWER_PASSWORD
+Note: the server runs on a free tier and may take up to 60 seconds to load the first time. The interface is in Portuguese; English translations are given in parentheses.
+
+HOW TO TEST
+1) Log in with the credentials above.
+2) In the left menu click "Instagram".
+3) Click "Conectar Instagram" (Connect Instagram). You are redirected to the official Instagram authorization screen. Log in with your own test Instagram professional account and click "Allow".
+4) You are redirected back to AutoInsta.
+
+WHERE TO SEE THE PROFILE INFORMATION
+- "Instagram" page (left menu): the card at the top shows the connected account's profile picture, @username, the "Conectado" (Connected) status and the connection date.
+- Same page, "Diagnóstico da integração" (Integration diagnostics) section: shows "Conta profissional" (Professional account) with the account type returned by the API.
+- "Configurações" (Settings) page, "Instagram" card: shows the connected @username.
+To disconnect, click "Desconectar" (Disconnect) on the Instagram page; the access token is deleted immediately.
+```
 
 ### Roteiro do vídeo (1–2 min)
 
+A Meta exige: (1) mostrar a conta profissional se conectando; (2) mostrar dados do perfil (username, foto) da conta conectada.
+
 | # | Ação na tela | Legenda (inglês) |
 |---|---|---|
-| 1–6 | **Abertura comum** (A1–A6) | — |
-| 7 | Página **Instagram**: mostrar @, foto e "Conectado" | *"AutoInsta displays the connected account's username and profile picture (instagram_business_basic)."* |
-| 8 | Rolar até **Diagnóstico**: "Conta conectada", "Token válido", "Conta profissional" | *"We verify the account is a professional (Business) account and the connection is valid."* |
-| 9 | Ir em **Configurações** → card Instagram mostrando @ | *"The connected account is shown in Settings."* |
-| 10 | Voltar em **Instagram** → **Desconectar** → confirmar | *"The owner can disconnect at any time; the access token is deleted immediately."* |
+| 1 | Abrir `https://autoinsta-avbp.onrender.com/login` e fazer login | *"The business owner logs in to AutoInsta."* |
+| 2 | Menu **Instagram**: estado desconectado (desconecte antes de gravar) | *"No Instagram account is connected yet."* |
+| 3 | Clicar em **Conectar Instagram** | *"The owner clicks 'Connect Instagram' (Business Login for Instagram)."* |
+| 4 | Tela oficial do Instagram: login e **lista de permissões** visível por 3 s | *"Instagram shows the permissions requested by AutoInsta."* |
+| 5 | Clicar em **Permitir** | *"The owner grants access."* |
+| 6 | Volta ao AutoInsta: **foto de perfil, @username e "Conectado"** em destaque. Passe o mouse sobre eles | *"AutoInsta displays the connected account's profile picture and username (instagram_business_basic)."* |
+| 7 | Rolar até **Diagnóstico**: "Conta profissional: BUSINESS" | *"The account type (Business) is read from the API to confirm it is a professional account."* |
+| 8 | Abrir **Configurações** → card Instagram com o @ | *"The connected username is also shown in Settings."* |
 
 ---
 
