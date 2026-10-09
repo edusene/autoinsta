@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { EventsMonitor } from '../components/EventsMonitor'
 import { ConfirmButton, ErrorAlert, Loading } from '../components/ui'
-import { useApi } from '../hooks/useApi'
+import { AUTO_REFRESH_MS, useApi } from '../hooks/useApi'
 import { api, errorMessage } from '../lib/api'
 import { formatDateTime, timeAgo } from '../lib/format'
 import { metaRedirectUri } from '../lib/supabase'
@@ -67,7 +67,7 @@ function Diagnostics() {
 }
 
 export function InstagramPage() {
-  const { data, error, loading, reload, setData } = useApi<InstagramStatus>('/api/instagram/status')
+  const { data, error, loading, reload, setData } = useApi<InstagramStatus>('/api/instagram/status', { refreshMs: AUTO_REFRESH_MS })
   const [params] = useSearchParams()
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)

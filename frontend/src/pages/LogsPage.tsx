@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Empty, ErrorAlert, ExecutionStatusBadge, Loading } from '../components/ui'
-import { useApi } from '../hooks/useApi'
+import { AUTO_REFRESH_MS, useApi } from '../hooks/useApi'
 import { formatDateTime, formatDuration, formatTime, TRIGGER_LABELS } from '../lib/format'
 import type { ExecutionDetail, ExecutionSummary, Paginated, Workflow } from '../types'
 
@@ -15,7 +15,7 @@ const STATUS_FILTERS = [
 ]
 
 function ExecutionPanel({ id }: { id: string }) {
-  const { data, error, loading } = useApi<ExecutionDetail>(`/api/executions/${id}`)
+  const { data, error, loading } = useApi<ExecutionDetail>(`/api/executions/${id}`, { refreshMs: AUTO_REFRESH_MS })
   if (loading && !data) return <Loading />
   if (error) return <div className="card-body"><ErrorAlert message={error} /></div>
   if (!data) return null
@@ -67,6 +67,7 @@ export function LogsPage() {
   const base = workflowId ? `/api/workflows/${workflowId}/executions` : '/api/logs'
   const { data, error, loading, reload } = useApi<Paginated<ExecutionSummary>>(
     `${base}?limit=${PAGE_SIZE}&offset=${offset}${status ? `&status=${status}` : ''}`,
+    { refreshMs: AUTO_REFRESH_MS },
   )
   const workflow = useApi<Workflow>(workflowId ? `/api/workflows/${workflowId}` : null)
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Empty, ErrorAlert, Loading } from '../components/ui'
-import { useApi } from '../hooks/useApi'
+import { AUTO_REFRESH_MS, useApi } from '../hooks/useApi'
 import { formatDateTime, timeAgo } from '../lib/format'
 import type { Contact, ContactDetail, Paginated } from '../types'
 
@@ -8,7 +8,7 @@ const EVENT_LABELS: Record<string, string> = { messages: 'Mensagem', comments: '
 const PAGE_SIZE = 25
 
 function ContactPanel({ id }: { id: string }) {
-  const { data, error, loading } = useApi<ContactDetail>(`/api/contacts/${id}`)
+  const { data, error, loading } = useApi<ContactDetail>(`/api/contacts/${id}`, { refreshMs: AUTO_REFRESH_MS })
   if (loading && !data) return <Loading />
   if (error) return <div className="card-body"><ErrorAlert message={error} /></div>
   if (!data) return null
@@ -48,7 +48,7 @@ export function ContactsPage() {
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const path = `/api/contacts?limit=${PAGE_SIZE}&offset=${offset}${query ? `&search=${encodeURIComponent(query)}` : ''}`
-  const { data, error, loading, reload } = useApi<Paginated<Contact>>(path)
+  const { data, error, loading, reload } = useApi<Paginated<Contact>>(path, { refreshMs: AUTO_REFRESH_MS })
 
   return (
     <div className="page stack">

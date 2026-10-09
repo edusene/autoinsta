@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ErrorAlert, ExecutionStatusBadge, Loading } from '../components/ui'
-import { useApi } from '../hooks/useApi'
+import { AUTO_REFRESH_MS, useApi } from '../hooks/useApi'
 import { formatDuration, timeAgo } from '../lib/format'
 import type { Dashboard, ExecutionSummary } from '../types'
 
@@ -24,7 +24,7 @@ function ExecutionList({ items, empty }: { items: ExecutionSummary[]; empty: str
 }
 
 export function DashboardPage() {
-  const { data, error, loading, reload } = useApi<Dashboard>('/api/dashboard')
+  const { data, error, loading, reload } = useApi<Dashboard>('/api/dashboard', { refreshMs: AUTO_REFRESH_MS })
 
   if (loading && !data) return <Loading />
   return (

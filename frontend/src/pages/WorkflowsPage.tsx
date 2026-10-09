@@ -1,14 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ConfirmButton, Empty, ErrorAlert, Loading, WorkflowStatusBadge } from '../components/ui'
-import { useApi } from '../hooks/useApi'
+import { AUTO_REFRESH_MS, useApi } from '../hooks/useApi'
 import { api, ApiError, errorMessage } from '../lib/api'
 import { formatDateTime, TRIGGER_LABELS } from '../lib/format'
 import type { Workflow, WorkflowSummary } from '../types'
 import { WORKFLOW_TEMPLATES, type WorkflowTemplate } from '../workflow/templates'
 
 export function WorkflowsPage() {
-  const { data, error, loading, reload } = useApi<WorkflowSummary[]>('/api/workflows')
+  const { data, error, loading, reload } = useApi<WorkflowSummary[]>('/api/workflows', { refreshMs: AUTO_REFRESH_MS })
   const navigate = useNavigate()
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
