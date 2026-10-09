@@ -72,6 +72,12 @@ class Config:
     # background worker (ex.: Render free). Em produção prefira `python worker.py` separado.
     EMBEDDED_WORKER = _bool("EMBEDDED_WORKER", False)
 
+    # Keep-alive (Render free): pinga a URL pública do próprio serviço para ele não hibernar.
+    # Vazio = desligado (padrão). Em VPS, deixe vazio.
+    KEEP_ALIVE_URL = os.getenv("KEEP_ALIVE_URL", "").strip()
+    # Entre 60 s e 840 s (precisa ser menor que os 15 min de ociosidade do Render)
+    KEEP_ALIVE_INTERVAL_SECONDS = min(max(int(os.getenv("KEEP_ALIVE_INTERVAL_SECONDS", "600")), 60), 840)
+
 
 class TestConfig(Config):
     ENV = "testing"
@@ -92,3 +98,4 @@ class TestConfig(Config):
     OPENAI_API_KEY = "sk-test-0000000000000000abcd"
     RATELIMIT_ENABLED = False
     EMBEDDED_WORKER = False
+    KEEP_ALIVE_URL = ""

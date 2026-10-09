@@ -5,7 +5,7 @@
 from app import create_app
 from app.tasks.worker import run_forever
 
-app = create_app()
+app = create_app(web_process=False)
 
 if __name__ == "__main__":
     with app.app_context():

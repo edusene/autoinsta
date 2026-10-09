@@ -40,7 +40,8 @@ def _check_config(app: Flask) -> None:
         raise RuntimeError("SECRET_KEY deve ter pelo menos 32 caracteres em produção.")
 
 
-def create_app(config_class: type = Config, init_db: bool = True) -> Flask:
+def create_app(config_class: type = Config, init_db: bool = True, web_process: bool = True) -> Flask:
+    """web_process=False (worker.py): não inicia worker embutido nem keep-alive."""
     app = Flask(__name__, static_folder=None)  # estáticos do painel: routes/frontend.py
     app.config.from_object(config_class)
     app.json = JSONProvider(app)
@@ -77,8 +78,12 @@ def create_app(config_class: type = Config, init_db: bool = True) -> Flask:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response
 
-    if init_db and app.config["EMBEDDED_WORKER"]:
+    if init_db and web_process and app.config["EMBEDDED_WORKER"]:
         _start_embedded_worker(app)
+    if init_db and web_process:
+        from app.tasks import keepalive
+
+        keepalive.start(app)  # só liga se KEEP_ALIVE_URL estiver definida
 
     logger.info("App iniciada (env=%s)", app.config["ENV"])
     return app

@@ -146,6 +146,8 @@ Uma única imagem Docker (`Dockerfile` na raiz) compila o painel e roda a API, q
 
 No plano free não há background worker: `EMBEDDED_WORKER=true` roda o worker dentro da API. O serviço hiberna após 15 min sem tráfego (cerca de 1 min para acordar); a Meta reenvia webhooks não confirmados.
 
+**Keep-alive (evita a hibernação):** defina `KEEP_ALIVE_URL=https://<seu-serviço>.onrender.com/health`. Uma thread interna chama essa URL a cada 10 min (`KEEP_ALIVE_INTERVAL_SECONDS`), e o Render não hiberna o serviço. Isso é importante durante a revisão da Meta, que exige resposta em até 30 s. Um serviço ligado 24h consome cerca de 744 das 750 h grátis do workspace. Para reforçar contra reinícios inesperados, você pode cadastrar a mesma URL num monitor externo grátis (ex.: cron-job.org, a cada 10 min). **Para desligar** (por exemplo, numa VPS), deixe `KEEP_ALIVE_URL` vazia: nenhum código precisa mudar.
+
 ### VPS
 
 ```bash
