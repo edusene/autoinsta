@@ -157,7 +157,34 @@ HOW TO TEST
 
 ### Descreva como seu aplicativo usa esta permissão
 
-> Businesses use AutoInsta to respond to comments on their own posts and reels. The business owner creates a comment automation (for example: when someone comments the keyword "EU QUERO" / "I WANT", send them the requested link). When someone comments on the connected account's media, we receive the "comments" webhook, check the business's rule, and then (1) send one private reply to the commenter via the Instagram Messaging API, as allowed by the platform (one private reply per comment, within 7 days), and (2) post a short public reply to that comment. We only act on comments on the connected account's own media, ignore comments made by the business itself to avoid loops, and never hide, delete or moderate comments of other users. Every comment received and every action taken is visible to the business owner in the events monitor and execution logs.
+Pré-requisitos: um **post público** no @sene.ia com o workflow "Comentou EU QUERO → DM" **ativo** na conta do AutoInsta conectada a ele, e o servidor **sem hibernar** (a Meta exige resposta em até 30 s). Troque `POST_LINK` pelo link do post.
+
+```
+HOW WE USE IT
+AutoInsta is a customer-service automation tool for Instagram professional accounts. We use instagram_business_manage_comments to receive comments made on the connected business account's own posts and reels (through the "comments" webhook) and to respond to them automatically, according to a rule the business owner configures in our visual workflow editor. In our main use case, when someone comments a keyword such as "EU QUERO" ("I WANT") on a post, AutoInsta (1) posts a public reply to that comment using the Comments API, and (2) sends one private reply to the commenter's Direct inbox using the Private Replies API, as allowed by the platform (one private reply per comment, within 7 days). Every comment received and every action taken is shown to the business owner in the "Eventos recebidos" (Received events) monitor and in the execution logs.
+
+VALUE FOR THE USER
+Businesses and creators run "comment to receive" campaigns ("comment I WANT to get the link / price / coupon"). Answering hundreds of comments by hand is slow and people give up waiting. AutoInsta answers every matching comment within seconds, publicly and in Direct, so the customer immediately gets what they asked for and the business converts more.
+
+WHY IT IS NECESSARY
+Without this permission the app cannot receive comments on the business's posts nor reply to them, so the comment automation feature would not work.
+
+LIMITS WE RESPECT
+We only act on comments on the connected account's own media, only when the comment matches the owner's rule, and ignore comments made by the business itself to avoid loops. We do not hide, delete or moderate other users' comments. instagram_business_basic is included in this submission as a dependent permission.
+
+HOW TO TEST (no login needed for this test)
+The automation is already active on this post of our test business account:
+POST_LINK
+1) Open the post above with any Instagram account.
+2) Comment exactly: eu quero
+   (the rule matches the words "eu quero", "quero" or "link", in any letter case)
+3) Within a few seconds:
+   - a public reply "Te enviei no direct! 📩" ("I sent it to your Direct!") appears under your comment (Comments API);
+   - a private message with the requested link arrives in your Direct inbox (Private Replies API).
+Comments that do not contain the keyword are ignored on purpose.
+
+To see the business side, log in at https://autoinsta-avbp.onrender.com/login with the reviewer credentials provided in the instagram_business_basic section, open "Instagram" > "Eventos recebidos" (Received events) and "Logs".
+```
 
 ### Roteiro do vídeo (2–3 min)
 
@@ -171,7 +198,8 @@ HOW TO TEST
 | 11 | Mostrar a **resposta pública** aparecendo no comentário | *"AutoInsta posts a public reply to the comment (instagram_business_manage_comments)."* |
 | 12 | Mostrar a **DM privada** que chegou ao cliente | *"The customer receives one private reply in Direct."* |
 | 13 | No AutoInsta: **Eventos recebidos** (Comentário, Processado) e **Logs** da execução | *"The comment and both actions are recorded in the dashboard."* |
-| 14 | **Desativar** o workflow | *"The owner can deactivate the automation at any time."* |
+
+A Meta exige que a resposta pública e a DM apareçam **em até 30 segundos** depois do comentário. Grave sem cortes entre o comentário e as respostas, com o servidor acordado.
 
 ---
 
