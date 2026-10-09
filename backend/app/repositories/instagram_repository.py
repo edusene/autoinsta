@@ -7,9 +7,17 @@ PUBLIC_COLUMNS = """
 
 
 def get_for_user(conn, user_id: str) -> dict | None:
-    """Conta mais recente do usuário (MVP: uma conta por usuário)."""
+    """Conta atual do usuário (MVP: uma conta por usuário).
+
+    Prioriza a conectada (ou com token expirado, que precisa de reconexão) e, entre elas, a
+    conectada mais recentemente. NÃO usar updated_at: eventos de uma conta antiga já
+    desconectada atualizam essa coluna e fariam a tela mostrar a conta errada.
+    """
     return conn.execute(
-        f"select {PUBLIC_COLUMNS} from instagram_accounts where user_id = %s order by updated_at desc limit 1",
+        f"""select {PUBLIC_COLUMNS} from instagram_accounts where user_id = %s
+            order by (status = 'connected') desc, (status <> 'disconnected') desc,
+                     connected_at desc nulls last, created_at desc
+            limit 1""",
         (user_id,),
     ).fetchone()
 

@@ -193,12 +193,14 @@ def process_event(event_id: str) -> None:
 
     with db.connection() as conn:
         account = instagram_repository.get_by_ig_user_id(conn, event["ig_account_id"])
-        if account:
-            instagram_repository.mark_webhook_received(conn, account["id"])
     if not account:
         return _ignore(event_id, "Conta do Instagram não cadastrada na plataforma.")
     if account["status"] != "connected":
         return _ignore(event_id, f"Conta com status '{account['status']}'.", account)
+    # Só eventos reais de contas conectadas registram "último evento" (simulações e contas antigas não)
+    if not is_simulated(event):
+        with db.connection() as conn:
+            instagram_repository.mark_webhook_received(conn, account["id"])
 
     item = event["payload"]
     user_id = str(account["user_id"])
