@@ -10,6 +10,7 @@ import hmac
 import json
 import logging
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from flask import current_app
@@ -22,7 +23,10 @@ from app.repositories import workflow_repository
 from app.services import instagram_service, meta_client
 from app.tasks import queue
 from app.workflow import engine
-from app.workflow.nodes import COMMENT_TRIGGER, MESSAGE_TRIGGER
+from app.workflow.nodes import (
+    COMMENT_TRIGGER, IG_ME_LINK_TRIGGER, LIVE_COMMENT_TRIGGER, MESSAGE_REACTION_TRIGGER, MESSAGE_TRIGGER,
+    NEW_CONTACT_TRIGGER, STORY_MENTION_TRIGGER, STORY_REPLY_TRIGGER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +124,24 @@ def _dedupe_key(field: str, item: dict, fallback_id: str | None) -> str:
     return f"{field}:sha256:{digest}"
 
 
+# Campo do webhook para cada tipo de item em entry[].messaging[]
+MESSAGING_FIELDS = (
+    ("message", "messages"),
+    ("reaction", "message_reactions"),
+    ("referral", "messaging_referral"),
+    ("postback", "messaging_postbacks"),
+    ("read", "messaging_seen"),
+)
+COMMENT_FIELDS = ("comments", "live_comments")
+
+
+def _messaging_field(item: dict) -> str:
+    for key, field in MESSAGING_FIELDS:
+        if key in item:
+            return field
+    return "messaging_other"
+
+
 def _split(payload: dict) -> list[tuple[str, str, str, dict]]:
     """Quebra o payload em itens (dedupe_key, field, ig_account_id, item)."""
     items = []
@@ -130,15 +152,15 @@ def _split(payload: dict) -> list[tuple[str, str, str, dict]]:
         for item in entry.get("messaging") or []:
             if not isinstance(item, dict):
                 continue
-            mid = (item.get("message") or {}).get("mid") if isinstance(item.get("message"), dict) else None
-            field = "messages" if "message" in item else "messaging_other"
+            field = _messaging_field(item)
+            mid = (item.get("message") or {}).get("mid") if field == "messages" and isinstance(item.get("message"), dict) else None
             items.append((_dedupe_key(field, item, mid), field, account_id, item))
         for change in entry.get("changes") or []:
             if not isinstance(change, dict):
                 continue
             field = str(change.get("field", "unknown"))
             value = change.get("value") if isinstance(change.get("value"), dict) else {}
-            comment_id = (value.get("id") or value.get("comment_id")) if field == "comments" else None
+            comment_id = (value.get("id") or value.get("comment_id")) if field in COMMENT_FIELDS else None
             items.append((_dedupe_key(field, value, comment_id), field, account_id, value))
     return items
 
@@ -185,6 +207,109 @@ def _enrich_contact(account: dict, contact: dict) -> dict:
             "name": profile.get("name") or contact.get("name")}
 
 
+@dataclass
+class Classified:
+    """Resultado da leitura de um evento: quais gatilhos disparar e o que vai para o contexto."""
+    triggers: list[str]                       # em ordem; o 1º com workflows ativos é o usado
+    sender_id: str
+    sender_username: str | None
+    summary: str
+    ctx: dict = field(default_factory=dict)
+    trigger_event: dict = field(default_factory=dict)
+    is_dm: bool = False                       # conversa por DM: conta para "Novo contato"
+
+
+def _classify(event: dict, account: dict) -> Classified | str:
+    """Interpreta o evento. Retorna Classified ou o motivo para ignorá-lo."""
+    item = event["payload"] or {}
+    kind = event["field"]
+    own_id = account["ig_user_id"]
+
+    if kind in ("messages", "messaging_referral", "message_reactions"):
+        sender_id = str((item.get("sender") or {}).get("id", ""))
+        if not sender_id:
+            return "Evento sem remetente."
+        if sender_id == own_id:
+            return "Evento gerado pela própria conta (eco)."
+
+    if kind == "messages":
+        message = item.get("message") or {}
+        if message.get("is_echo"):
+            return "Mensagem enviada pela própria conta (eco)."
+        if message.get("is_deleted"):
+            return "Mensagem apagada."
+        text = message.get("text") or ""
+        attachments = [a for a in message.get("attachments") or [] if isinstance(a, dict)]
+        ctx = {"message": {"id": message.get("mid"), "text": text, "has_attachments": bool(attachments)}}
+        mention = next((a for a in attachments if a.get("type") == "story_mention"), None)
+        story = (message.get("reply_to") or {}).get("story")
+        referral = message.get("referral")
+        if mention:
+            ctx["story"] = {"url": (mention.get("payload") or {}).get("url") or ""}
+            return Classified([STORY_MENTION_TRIGGER], sender_id, None, "[menção no story]", ctx,
+                              {"message_id": message.get("mid")}, is_dm=True)
+        if isinstance(story, dict):
+            ctx["story"] = {"id": story.get("id") or "", "url": story.get("url") or ""}
+            return Classified([STORY_REPLY_TRIGGER, MESSAGE_TRIGGER], sender_id, None,
+                              f"[resposta ao story] {text}"[:200], ctx, {"message_id": message.get("mid")}, is_dm=True)
+        if isinstance(referral, dict):
+            ctx["referral"] = {k: referral.get(k) or "" for k in ("ref", "source", "type")}
+            return Classified([IG_ME_LINK_TRIGGER, MESSAGE_TRIGGER], sender_id, None,
+                              f"[link ig.me {ctx['referral']['ref']}] {text}"[:200], ctx,
+                              {"message_id": message.get("mid"), "ref": ctx["referral"]["ref"]}, is_dm=True)
+        return Classified([MESSAGE_TRIGGER], sender_id, None, text[:200] or "[mensagem sem texto]", ctx,
+                          {"message_id": message.get("mid")}, is_dm=True)
+
+    if kind == "messaging_referral":
+        referral = item.get("referral") or {}
+        ctx = {"referral": {k: referral.get(k) or "" for k in ("ref", "source", "type")}, "message": {"text": ""}}
+        return Classified([IG_ME_LINK_TRIGGER], sender_id, None, f"[link ig.me {ctx['referral']['ref']}]", ctx,
+                          {"ref": ctx["referral"]["ref"]})
+
+    if kind == "message_reactions":
+        reaction = item.get("reaction") or {}
+        if reaction.get("action") == "unreact":
+            return "Reação removida."
+        ctx = {"reaction": {"emoji": reaction.get("emoji") or "", "type": reaction.get("reaction") or "",
+                            "message_id": reaction.get("mid") or ""}, "message": {"text": ""}}
+        return Classified([MESSAGE_REACTION_TRIGGER], sender_id, None,
+                          f"[reação {ctx['reaction']['emoji'] or ctx['reaction']['type']}]", ctx,
+                          {"message_id": ctx["reaction"]["message_id"]})
+
+    if kind in COMMENT_FIELDS:
+        sender = item.get("from") or {}
+        sender_id = str(sender.get("id", ""))
+        if not sender_id:
+            return "Comentário sem autor."
+        if sender_id == own_id:
+            return "Comentário feito pela própria conta."
+        media = item.get("media") or {}
+        ctx = {"comment": {
+            "id": item.get("id") or item.get("comment_id"),
+            "text": item.get("text") or "",
+            "media_id": media.get("id"),
+            "media_type": media.get("media_product_type"),
+            "parent_id": item.get("parent_id"),
+        }}
+        trigger = COMMENT_TRIGGER if kind == "comments" else LIVE_COMMENT_TRIGGER
+        prefix = "" if kind == "comments" else "[live] "
+        return Classified([trigger], sender_id, sender.get("username"), f"{prefix}{item.get('text') or ''}"[:200],
+                          ctx, {"comment_id": ctx["comment"]["id"], "media_id": ctx["comment"]["media_id"]})
+
+    return f"Campo '{kind}' não tratado."
+
+
+def _matches_trigger_config(workflow: dict, ctx: dict) -> bool:
+    cfg = _trigger_config(workflow)
+    if workflow["trigger_type"] == COMMENT_TRIGGER:
+        wanted = (cfg.get("media_id") or "").strip()
+        return not wanted or wanted == str(ctx["comment"]["media_id"] or "")
+    if workflow["trigger_type"] == IG_ME_LINK_TRIGGER:
+        wanted = (cfg.get("ref") or "").strip().lower()
+        return not wanted or wanted == str(ctx.get("referral", {}).get("ref") or "").strip().lower()
+    return True
+
+
 def process_event(event_id: str) -> None:
     with db.connection() as conn:
         event = event_repo.get(conn, event_id)
@@ -197,86 +322,58 @@ def process_event(event_id: str) -> None:
         return _ignore(event_id, "Conta do Instagram não cadastrada na plataforma.")
     if account["status"] != "connected":
         return _ignore(event_id, f"Conta com status '{account['status']}'.", account)
+    simulated = is_simulated(event)
     # Só eventos reais de contas conectadas registram "último evento" (simulações e contas antigas não)
-    if not is_simulated(event):
+    if not simulated:
         with db.connection() as conn:
             instagram_repository.mark_webhook_received(conn, account["id"])
 
-    item = event["payload"]
+    classified = _classify(event, account)
+    if isinstance(classified, str):
+        return _ignore(event_id, classified, account)
+
     user_id = str(account["user_id"])
-    simulated = is_simulated(event)
     ctx: dict = {
         "trigger": {"received_at": datetime.now(timezone.utc).isoformat(), "simulated": simulated},
         "vars": {},
         "ai": {},
         # dry_run: ações que enviariam algo ao Instagram são apenas registradas
         "_sys": {"account_id": str(account["id"]), "dry_run": simulated},
+        **classified.ctx,
     }
 
-    if event["field"] == "messages":
-        message = item.get("message") or {}
-        sender_id = str((item.get("sender") or {}).get("id", ""))
-        if message.get("is_echo") or sender_id == account["ig_user_id"]:
-            return _ignore(event_id, "Mensagem enviada pela própria conta (eco).", account)
-        if message.get("is_deleted"):
-            return _ignore(event_id, "Mensagem apagada.", account)
-        if not sender_id:
-            return _ignore(event_id, "Mensagem sem remetente.", account)
-        trigger_type = MESSAGE_TRIGGER
-        text = message.get("text") or ""
-        ctx["message"] = {"id": message.get("mid"), "text": text,
-                          "has_attachments": bool(message.get("attachments"))}
-        contact_igsid, contact_username = sender_id, None
-        summary = text[:200] or "[mensagem sem texto]"
-    elif event["field"] == "comments":
-        sender = item.get("from") or {}
-        sender_id = str(sender.get("id", ""))
-        if sender_id == account["ig_user_id"]:
-            return _ignore(event_id, "Comentário feito pela própria conta.", account)
-        if not sender_id:
-            return _ignore(event_id, "Comentário sem autor.", account)
-        trigger_type = COMMENT_TRIGGER
-        media = item.get("media") or {}
-        ctx["comment"] = {
-            "id": item.get("id") or item.get("comment_id"),
-            "text": item.get("text") or "",
-            "media_id": media.get("id"),
-            "media_type": media.get("media_product_type"),
-            "parent_id": item.get("parent_id"),
-        }
-        contact_igsid, contact_username = sender_id, sender.get("username")
-        summary = (item.get("text") or "")[:200]
-    else:
-        return _ignore(event_id, f"Campo '{event['field']}' não tratado pelo MVP.", account)
-
     with db.connection() as conn:
-        contact = contact_repository.upsert_from_event(conn, user_id, str(account["id"]), contact_igsid,
-                                                       contact_username, event["field"])
-        contact_repository.add_event(conn, user_id, contact["id"], event["field"], summary,
+        contact = contact_repository.upsert_from_event(conn, user_id, str(account["id"]), classified.sender_id,
+                                                       classified.sender_username, event["field"])
+        contact_repository.add_event(conn, user_id, contact["id"], event["field"], classified.summary,
                                      {"webhook_event_id": str(event_id)})
-        workflows = workflow_repository.list_active_by_trigger(conn, user_id, trigger_type)
+        # 1º gatilho da lista com workflows ativos (ex.: resposta ao story -> mensagem recebida)
+        selected: list[tuple[str, dict]] = []
+        for trigger in classified.triggers:
+            found = workflow_repository.list_active_by_trigger(conn, user_id, trigger)
+            if found:
+                selected = [(trigger, w) for w in found]
+                break
+        if classified.is_dm and contact.get("inserted"):
+            selected += [(NEW_CONTACT_TRIGGER, w)
+                         for w in workflow_repository.list_active_by_trigger(conn, user_id, NEW_CONTACT_TRIGGER)]
         settings = settings_repository.get(conn, user_id)
         # Marca como processado ANTES de executar: um retry do job não duplica mensagens enviadas.
-        event_repo.set_status(conn, event_id, "processed", f"{len(workflows)} workflow(s) compatível(is).",
+        event_repo.set_status(conn, event_id, "processed", f"{len(selected)} workflow(s) compatível(is).",
                               str(account["id"]), user_id)
 
-    if trigger_type == MESSAGE_TRIGGER and not simulated:
+    if classified.is_dm and not simulated:
         contact = _enrich_contact(account, contact)
-    ctx["contact"] = {"id": str(contact["id"]), "ig_id": contact_igsid,
+    ctx["contact"] = {"id": str(contact["id"]), "ig_id": classified.sender_id,
                       "username": contact.get("username") or "", "name": contact.get("name") or ""}
     if settings and settings.get("ai_default_model"):
         ctx["_sys"]["ai_default_model"] = settings["ai_default_model"]
 
-    trigger_event = {"field": event["field"], "summary": summary,
-                     **({"comment_id": ctx["comment"]["id"], "media_id": ctx["comment"]["media_id"]}
-                        if trigger_type == COMMENT_TRIGGER else {"message_id": ctx["message"]["id"]})}
-
-    for workflow in workflows:
-        if trigger_type == COMMENT_TRIGGER:
-            trigger_cfg = _trigger_config(workflow)
-            wanted_media = (trigger_cfg.get("media_id") or "").strip()
-            if wanted_media and wanted_media != str(ctx["comment"]["media_id"] or ""):
-                continue
+    for trigger, workflow in selected:
+        if not _matches_trigger_config(workflow, ctx):
+            continue
+        trigger_event = {"field": event["field"], "trigger": trigger, "summary": classified.summary,
+                         **classified.trigger_event}
         try:
             engine.start(workflow, json.loads(json.dumps(ctx)), trigger_event, str(contact["id"]), str(event_id))
         except Exception:  # noqa: BLE001 - um workflow com problema não bloqueia os outros
@@ -292,6 +389,10 @@ def is_simulated(event: dict) -> bool:
     return str(event.get("dedupe_key", "")).startswith(SIMULATION_PREFIX)
 
 
+SIMULATION_KINDS = ("message", "comment", "new_contact", "story_mention", "story_reply", "ig_me_link",
+                    "reaction", "live_comment")
+
+
 def simulate(user_id: str, kind: str, text: str) -> dict:
     """Cria um evento de teste para a conta do usuário e processa como se viesse da Meta (sem enviar nada)."""
     with db.connection() as conn:
@@ -299,32 +400,70 @@ def simulate(user_id: str, kind: str, text: str) -> dict:
     if not account:
         raise AppError("INSTAGRAM_NOT_CONNECTED", "Conecte o Instagram antes de simular eventos.", 409)
     sim_id = uuid.uuid4().hex[:12]
-    if kind == "comment":
-        field = "comments"
+    # "Novo contato" precisa de um remetente nunca visto; os demais reaproveitam o contato de teste
+    sender_id = f"{SIMULATED_SENDER_ID}-{sim_id}" if kind == "new_contact" else SIMULATED_SENDER_ID
+    base = {"sender": {"id": sender_id}, "recipient": {"id": account["ig_user_id"]},
+            "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000)}
+    message = {"mid": f"sim-mid-{sim_id}", "text": text}
+
+    if kind in ("comment", "live_comment"):
+        field = "comments" if kind == "comment" else "live_comments"
         item = {"from": {"id": SIMULATED_SENDER_ID, "username": "teste_simulado"}, "id": f"sim-comment-{sim_id}",
-                "text": text, "media": {"id": "simulado", "media_product_type": "FEED"}}
-    else:
+                "text": text, "media": {"id": "simulado", "media_product_type": "FEED" if kind == "comment" else "LIVE"}}
+    elif kind == "story_mention":
         field = "messages"
-        item = {"sender": {"id": SIMULATED_SENDER_ID}, "recipient": {"id": account["ig_user_id"]},
-                "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
-                "message": {"mid": f"sim-mid-{sim_id}", "text": text}}
+        item = {**base, "message": {"mid": message["mid"],
+                                    "attachments": [{"type": "story_mention", "payload": {"url": "https://exemplo/story"}}]}}
+    elif kind == "story_reply":
+        field = "messages"
+        item = {**base, "message": {**message, "reply_to": {"story": {"id": "story-simulado", "url": "https://exemplo/story"}}}}
+    elif kind == "ig_me_link":
+        field = "messages"
+        ref = text.strip().split()[0][:100] if text.strip() else "simulado"
+        item = {**base, "message": {**message, "referral": {"ref": ref, "source": "IGME_SOURCE_LINK", "type": "OPEN_THREAD"}}}
+    elif kind == "reaction":
+        field = "message_reactions"
+        item = {**base, "reaction": {"mid": f"sim-mid-{sim_id}", "action": "react", "reaction": "love",
+                                     "emoji": text.strip()[:8] or "❤️"}}
+    else:  # message, new_contact
+        field = "messages"
+        item = {**base, "message": message}
+
     with db.connection() as conn:
         row = event_repo.insert_if_new(conn, f"{SIMULATION_PREFIX}{sim_id}", "instagram", field,
                                        account["ig_user_id"], item)
         queue.enqueue(conn, "process_webhook_event", {"event_id": str(row["id"])})
-    logger.info("Evento simulado criado: %s (%s) user=%s", row["id"], field, user_id)
-    return {"event_id": str(row["id"]), "field": field}
+    logger.info("Evento simulado criado: %s (%s/%s) user=%s", row["id"], kind, field, user_id)
+    return {"event_id": str(row["id"]), "field": field, "kind": kind}
 
 
 def _summarize(event: dict) -> dict:
     item = event["payload"] or {}
-    if event["field"] == "messages":
+    field = event["field"]
+    sender = (item.get("sender") or {}).get("id")
+    if field == "messages":
         message = item.get("message") or {}
-        return {"text": (message.get("text") or "")[:300], "from": (item.get("sender") or {}).get("id"),
-                "is_echo": bool(message.get("is_echo")), "has_attachments": bool(message.get("attachments"))}
-    if event["field"] == "comments":
-        sender = item.get("from") or {}
-        return {"text": (item.get("text") or "")[:300], "from": sender.get("username") or sender.get("id"),
+        attachments = [a for a in message.get("attachments") or [] if isinstance(a, dict)]
+        if any(a.get("type") == "story_mention" for a in attachments):
+            text = "[menção no story]"
+        elif isinstance((message.get("reply_to") or {}).get("story"), dict):
+            text = f"[resposta ao story] {message.get('text') or ''}"
+        elif isinstance(message.get("referral"), dict):
+            text = f"[link ig.me {message['referral'].get('ref') or ''}] {message.get('text') or ''}"
+        else:
+            text = message.get("text") or ""
+        return {"text": text[:300], "from": sender, "is_echo": bool(message.get("is_echo")),
+                "has_attachments": bool(attachments)}
+    if field == "messaging_referral":
+        return {"text": f"[link ig.me {(item.get('referral') or {}).get('ref') or ''}]", "from": sender}
+    if field == "message_reactions":
+        reaction = item.get("reaction") or {}
+        verb = "removeu reação" if reaction.get("action") == "unreact" else "reagiu"
+        return {"text": f"[{verb} {reaction.get('emoji') or reaction.get('reaction') or ''}]", "from": sender}
+    if field in COMMENT_FIELDS:
+        author = item.get("from") or {}
+        prefix = "" if field == "comments" else "[live] "
+        return {"text": f"{prefix}{item.get('text') or ''}"[:300], "from": author.get("username") or author.get("id"),
                 "media_id": (item.get("media") or {}).get("id")}
     return {}
 

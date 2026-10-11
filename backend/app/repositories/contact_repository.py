@@ -12,7 +12,7 @@ def upsert_from_event(
             username = coalesce(excluded.username, contacts.username),
             last_interaction_at = now(),
             last_event_type = excluded.last_event_type
-        returning *
+        returning *, (xmax = 0) as inserted
         """,
         (user_id, account_id, ig_scoped_id, username, event_type),
     ).fetchone()

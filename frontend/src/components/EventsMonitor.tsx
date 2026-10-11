@@ -28,7 +28,28 @@ interface EventsData {
   rejections: Rejection[]
 }
 
-const FIELD_LABELS: Record<string, string> = { messages: 'DM', comments: 'Comentário' }
+const FIELD_LABELS: Record<string, string> = {
+  messages: 'DM',
+  comments: 'Comentário',
+  live_comments: 'Comentário em live',
+  message_reactions: 'Reação',
+  messaging_referral: 'Link ig.me',
+  messaging_seen: 'Leitura',
+  messaging_postbacks: 'Botão',
+}
+
+// Tipos de evento que dá para simular (sem enviar nada ao Instagram)
+const SIMULATION_KINDS = [
+  ['message', 'DM recebida', 'Olá! Quanto custa?'],
+  ['new_contact', 'Novo contato (1ª DM)', 'Oi, tudo bem?'],
+  ['story_reply', 'Resposta ao story', 'eu quero'],
+  ['story_mention', 'Menção no story', ''],
+  ['ig_me_link', 'Link ig.me (texto = ref)', 'promo'],
+  ['reaction', 'Reação a mensagem (texto = emoji)', '❤️'],
+  ['comment', 'Comentário recebido', 'eu quero'],
+  ['live_comment', 'Comentário em live', 'qual o preço?'],
+] as const
+type SimulationKind = (typeof SIMULATION_KINDS)[number][0]
 const STATUS: Record<WebhookEventRow['status'], [string, string]> = {
   received: ['Na fila', 'badge-info'],
   processed: ['Processado', 'badge-success'],
@@ -41,7 +62,7 @@ const REFRESH_MS = 10_000
 export function EventsMonitor() {
   const [data, setData] = useState<EventsData | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [kind, setKind] = useState<'message' | 'comment'>('message')
+  const [kind, setKind] = useState<SimulationKind>('message')
   const [text, setText] = useState('Olá! Quanto custa?')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -112,16 +133,23 @@ export function EventsMonitor() {
       <form className="card-body row" onSubmit={simulate} style={{ borderBottom: '1px solid var(--border)', alignItems: 'flex-end' }}>
         <div className="field">
           <label htmlFor="sim-kind">Simular</label>
-          <select id="sim-kind" className="select" value={kind} onChange={(e) => setKind(e.target.value as 'message' | 'comment')}>
-            <option value="message">DM recebida</option>
-            <option value="comment">Comentário recebido</option>
+          <select id="sim-kind" className="select" value={kind} onChange={(e) => {
+            const next = SIMULATION_KINDS.find(([value]) => value === e.target.value)
+            if (next) {
+              setKind(next[0])
+              setText(next[2])
+            }
+          }}>
+            {SIMULATION_KINDS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </div>
         <div className="field" style={{ flex: 1, minWidth: 220 }}>
           <label htmlFor="sim-text">Texto</label>
-          <input id="sim-text" className="input" maxLength={1000} required value={text} onChange={(e) => setText(e.target.value)} />
+          <input id="sim-text" className="input" maxLength={1000} required={kind !== 'story_mention'}
+            disabled={kind === 'story_mention'} placeholder={kind === 'story_mention' ? '(menções não têm texto)' : ''}
+            value={text} onChange={(e) => setText(e.target.value)} />
         </div>
-        <button className="btn" disabled={busy || !text.trim()}>{busy ? 'Enviando…' : 'Simular evento'}</button>
+        <button className="btn" disabled={busy || (kind !== 'story_mention' && !text.trim())}>{busy ? 'Enviando…' : 'Simular evento'}</button>
       </form>
       {notice && <div className="card-body"><div className="alert alert-info">{notice}</div></div>}
 

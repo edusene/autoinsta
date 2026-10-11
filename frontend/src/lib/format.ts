@@ -28,4 +28,10 @@ export function timeAgo(value: string | null | undefined): string {
 export const TRIGGER_LABELS: Record<string, string> = {
   'trigger.message_received': 'Mensagem recebida',
   'trigger.comment_received': 'Comentário recebido',
+  'trigger.new_contact': 'Novo contato',
+  'trigger.story_mention': 'Menção no story',
+  'trigger.story_reply': 'Resposta ao story',
+  'trigger.ig_me_link': 'Link ig.me',
+  'trigger.message_reaction': 'Reação a mensagem',
+  'trigger.live_comment': 'Comentário em live',
 }

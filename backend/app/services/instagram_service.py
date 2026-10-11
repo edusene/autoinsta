@@ -283,9 +283,19 @@ def diagnostics(user_id: str) -> dict:
         add("permissions", "Permissões verificadas", not missing_perms,
             f"Faltando: {', '.join(missing_perms)}" if missing_perms else ", ".join(sorted(perms)))
 
-        add("webhook_subscribed", "Webhook configurado", account["webhook_subscribed"],
-            "Campos: messages, comments" if account["webhook_subscribed"]
-            else (account["last_error"] or "Clique em 'Reativar webhooks'."))
+        if not account["webhook_subscribed"]:
+            add("webhook_subscribed", "Webhook configurado", False,
+                account["last_error"] or "Clique em 'Reativar webhooks'.")
+        else:
+            try:
+                subscribed = meta_client.get_subscribed_fields(token_service.decrypt(token_row["access_token_encrypted"]))
+                missing_fields = [f for f in meta_client.WEBHOOK_FIELDS if f not in subscribed]
+                add("webhook_subscribed", "Webhook configurado", not missing_fields,
+                    f"Campos: {', '.join(meta_client.WEBHOOK_FIELDS)}" if not missing_fields
+                    else f"Faltam campos: {', '.join(missing_fields)}. Clique em 'Reativar webhooks'.")
+            except (MetaApiError, AppError) as exc:
+                add("webhook_subscribed", "Webhook configurado", None,
+                    f"Não foi possível conferir os campos assinados: {getattr(exc, 'message', exc)}")
 
         from app.services import webhook_service  # import local: evita ciclo entre os serviços
 

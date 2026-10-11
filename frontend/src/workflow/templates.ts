@@ -84,6 +84,34 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     },
   },
   {
+    id: 'welcome',
+    name: 'Boas-vindas a novos contatos',
+    description: 'Na 1ª mensagem de alguém, envia uma saudação com o link principal.',
+    graph: {
+      nodes: [
+        node('gatilho', 'trigger.new_contact', 80, 40),
+        node('boas_vindas', 'action.send_message', 80, 200, {
+          text: 'Oi, {{contact.username}}! Que bom ter você por aqui 💜 Confira nossos produtos: https://seusite.com',
+        }),
+      ],
+      edges: [edge('gatilho', 'boas_vindas')],
+    },
+  },
+  {
+    id: 'story-mention',
+    name: 'Agradecer menção no story',
+    description: 'Quem marca a conta em um story recebe um agradecimento com cupom.',
+    graph: {
+      nodes: [
+        node('gatilho', 'trigger.story_mention', 80, 40),
+        node('obrigado', 'action.send_message', 80, 200, {
+          text: 'Obrigado pela menção, {{contact.username}}! 🙌 Use o cupom OBRIGADO10 na próxima compra.',
+        }),
+      ],
+      edges: [edge('gatilho', 'obrigado')],
+    },
+  },
+  {
     id: 'comment-dm',
     name: 'Comentou "EU QUERO" → DM',
     description: 'Quem comenta a palavra-chave recebe o link por DM e uma resposta pública.',

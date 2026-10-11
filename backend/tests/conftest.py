@@ -161,6 +161,7 @@ def meta_mock(monkeypatch):
     mock.set("reply_to_comment", {"id": "reply_1"})
     mock.set("get_user_profile", {"name": "Cliente Teste", "username": "cliente_teste"})
     mock.set("subscribe_webhooks", {"success": True})
+    mock.set("get_subscribed_fields", lambda *a: list(meta_client.WEBHOOK_FIELDS))
     return mock
 
 

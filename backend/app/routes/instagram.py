@@ -13,8 +13,9 @@ bp = Blueprint("instagram", __name__, url_prefix="/api/instagram")
 
 
 class SimulateBody(BaseModel):
-    kind: Literal["message", "comment"] = "message"
-    text: str = Field(min_length=1, max_length=1000)
+    kind: Literal["message", "comment", "new_contact", "story_mention", "story_reply", "ig_me_link",
+                  "reaction", "live_comment"] = "message"
+    text: str = Field(default="", max_length=1000)
 
 
 class CallbackBody(BaseModel):

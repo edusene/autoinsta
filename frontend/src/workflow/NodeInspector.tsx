@@ -6,6 +6,9 @@ const VARIABLES = [
   ['{{comment.text}}', 'texto do comentário'],
   ['{{contact.username}}', 'username de quem interagiu'],
   ['{{contact.name}}', 'nome (quando disponível)'],
+  ['{{story.url}}', 'link do story (menção ou resposta)'],
+  ['{{referral.ref}}', 'origem do link ig.me'],
+  ['{{reaction.emoji}}', 'emoji da reação'],
   ['{{ai.response}}', 'última resposta da IA'],
   ['{{vars.nome}}', 'variável definida no fluxo'],
 ]
@@ -106,7 +109,7 @@ export function EditorHelp() {
     <div className="inspector-body">
       <h2>Como montar o fluxo</h2>
       <ol className="small muted" style={{ paddingLeft: 18, margin: 0, lineHeight: 1.7 }}>
-        <li>Comece pelo <strong>gatilho</strong> (DM ou comentário).</li>
+        <li>Comece pelo <strong>gatilho</strong>: DM, novo contato, story, link ig.me, reação ou comentário.</li>
         <li>Clique nos blocos à esquerda para adicioná-los.</li>
         <li>Arraste da bolinha de baixo de um bloco até outro para conectar.</li>
         <li>Condições têm duas saídas: <span style={{ color: 'var(--success)' }}>Sim</span> e <span style={{ color: 'var(--danger)' }}>Não</span>.</li>

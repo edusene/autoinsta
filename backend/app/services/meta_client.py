@@ -31,7 +31,8 @@ REQUIRED_SCOPES = [
     "instagram_business_manage_messages",
     "instagram_business_manage_comments",
 ]
-WEBHOOK_FIELDS = ["messages", "comments"]
+# messages também traz menções e respostas a stories; os demais alimentam os outros gatilhos
+WEBHOOK_FIELDS = ["messages", "comments", "messaging_referral", "message_reactions", "live_comments"]
 
 # Códigos de erro da Graph API que indicam token inválido/expirado/revogado.
 TOKEN_ERROR_CODES = {190}
@@ -161,6 +162,15 @@ def get_me(token: str) -> dict:
         token=token,
         params={"fields": "user_id,username,name,account_type,profile_picture_url"},
     )
+
+
+def get_subscribed_fields(token: str) -> list[str]:
+    """Campos de webhook que a conta tem assinados para este app."""
+    body = _request("GET", f"{GRAPH_HOST}/{_version()}/me/subscribed_apps", "ler assinatura de webhooks", token=token)
+    fields: list[str] = []
+    for entry in body.get("data") or []:
+        fields += [str(f) for f in entry.get("subscribed_fields") or []]
+    return fields
 
 
 def subscribe_webhooks(token: str, fields: list[str] | None = None) -> dict:

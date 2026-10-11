@@ -20,6 +20,16 @@ IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,39}$")
 
 MESSAGE_TRIGGER = "trigger.message_received"
 COMMENT_TRIGGER = "trigger.comment_received"
+NEW_CONTACT_TRIGGER = "trigger.new_contact"
+STORY_MENTION_TRIGGER = "trigger.story_mention"
+STORY_REPLY_TRIGGER = "trigger.story_reply"
+IG_ME_LINK_TRIGGER = "trigger.ig_me_link"
+MESSAGE_REACTION_TRIGGER = "trigger.message_reaction"
+LIVE_COMMENT_TRIGGER = "trigger.live_comment"
+
+# Gatilhos originados em conversa de DM: a resposta por DM é permitida (janela de 24h)
+DM_TRIGGERS = [MESSAGE_TRIGGER, NEW_CONTACT_TRIGGER, STORY_MENTION_TRIGGER, STORY_REPLY_TRIGGER,
+               IG_ME_LINK_TRIGGER, MESSAGE_REACTION_TRIGGER]
 
 _text_help = "Aceita variáveis como {{contact.username}}, {{message.text}}, {{ai.response}}, {{vars.nome}}."
 
@@ -45,13 +55,68 @@ NODE_TYPES: dict[str, dict] = {
         ],
         "variables": ["comment.text", "comment.id", "comment.media_id", "contact.username"],
     },
+    NEW_CONTACT_TRIGGER: {
+        "category": "trigger",
+        "label": "Novo contato",
+        "description": "Dispara na primeira mensagem de alguém que nunca falou com a conta (boas-vindas). "
+                       "A Meta não informa novos seguidores; esta é a alternativa oficial.",
+        "outputs": ["default"],
+        "fields": [],
+        "variables": ["message.text", "contact.username", "contact.name", "contact.id"],
+    },
+    STORY_MENTION_TRIGGER: {
+        "category": "trigger",
+        "label": "Menção no story",
+        "description": "Dispara quando alguém marca a conta em um story.",
+        "outputs": ["default"],
+        "fields": [],
+        "variables": ["story.url", "contact.username", "contact.name"],
+    },
+    STORY_REPLY_TRIGGER: {
+        "category": "trigger",
+        "label": "Resposta ao story",
+        "description": "Dispara quando alguém responde um story da conta por DM. Sem workflow deste tipo, "
+                       "a resposta segue para os workflows de \"Mensagem recebida\".",
+        "outputs": ["default"],
+        "fields": [],
+        "variables": ["message.text", "story.id", "story.url", "contact.username"],
+    },
+    IG_ME_LINK_TRIGGER: {
+        "category": "trigger",
+        "label": "Link ig.me",
+        "description": "Dispara quando a conversa é aberta por um link ig.me/sua_conta?ref=ORIGEM "
+                       "(bio, anúncio, QR code).",
+        "outputs": ["default"],
+        "fields": [
+            {"name": "ref", "label": "Referência (opcional)", "type": "text", "required": False,
+             "max_length": 100, "help": "Só dispara para este ref (ex.: promo). Vazio = qualquer link."},
+        ],
+        "variables": ["referral.ref", "referral.source", "message.text", "contact.username"],
+    },
+    MESSAGE_REACTION_TRIGGER: {
+        "category": "trigger",
+        "label": "Reação a mensagem",
+        "description": "Dispara quando alguém reage (ex.: ❤️) a uma mensagem da conta.",
+        "outputs": ["default"],
+        "fields": [],
+        "variables": ["reaction.emoji", "reaction.type", "contact.username"],
+    },
+    LIVE_COMMENT_TRIGGER: {
+        "category": "trigger",
+        "label": "Comentário em live",
+        "description": "Dispara com comentários durante uma transmissão ao vivo. A Meta só permite "
+                       "responder por DM (resposta privada) e enquanto a live está no ar.",
+        "outputs": ["default"],
+        "fields": [],
+        "variables": ["comment.text", "comment.id", "contact.username"],
+    },
     # ----- ações -----
     "action.send_message": {
         "category": "action",
         "label": "Enviar mensagem (DM)",
         "description": "Responde por DM. A Meta só permite responder até 24h após a última mensagem do usuário.",
         "outputs": ["default"],
-        "allowed_triggers": [MESSAGE_TRIGGER],
+        "allowed_triggers": DM_TRIGGERS,
         "fields": [
             {"name": "text", "label": "Mensagem", "type": "textarea", "required": True, "max_length": 1000,
              "help": _text_help},
@@ -62,7 +127,7 @@ NODE_TYPES: dict[str, dict] = {
         "label": "Responder comentário por DM",
         "description": "Envia uma DM para quem comentou (resposta privada oficial). Só 1 por comentário, até 7 dias.",
         "outputs": ["default"],
-        "allowed_triggers": [COMMENT_TRIGGER],
+        "allowed_triggers": [COMMENT_TRIGGER, LIVE_COMMENT_TRIGGER],
         "fields": [
             {"name": "text", "label": "Mensagem", "type": "textarea", "required": True, "max_length": 1000,
              "help": _text_help},
