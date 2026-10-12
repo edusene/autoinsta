@@ -196,6 +196,20 @@ NODE_TYPES: dict[str, dict] = {
         "fields": [],
     },
     # ----- condições -----
+    "condition.follows": {
+        "category": "condition",
+        "label": "Contato segue a conta?",
+        "description": "Segue pelo caminho Sim se a pessoa segue a conta. A Meta só permite verificar depois "
+                       "que a pessoa manda uma DM; em comentários, peça antes para ela responder a DM.",
+        "outputs": ["true", "false"],
+        "fields": [
+            {"name": "on_unknown", "label": "Se não der para verificar, seguir por", "type": "select",
+             "required": True, "default": "false",
+             "options": [{"value": "false", "label": "Não (tratar como não seguidor)"},
+                         {"value": "true", "label": "Sim (tratar como seguidor)"}],
+             "help": "Acontece quando a pessoa ainda não mandou DM (ex.: só comentou)."},
+        ],
+    },
     "condition.check": {
         "category": "condition",
         "label": "Condição",
@@ -351,6 +365,36 @@ def exec_set_variable(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
     return NodeResult(f"Variável '{name}' definida.", output={"name": name, "value": value[:300]})
 
 
+def exec_follows(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
+    contact = ctx.setdefault("contact", {})
+    if isinstance(contact.get("follows"), bool):
+        follows, source = contact["follows"], "já verificado nesta execução"
+    elif rt.dry_run:
+        follows, source = True, "simulação (considerado seguidor)"
+    else:
+        igsid = contact.get("ig_id")
+        if not igsid:
+            raise NodeError("Contato sem ID do Instagram para verificar.")
+        try:
+            profile = meta_client.get_user_profile(rt.token(), igsid, "is_user_follow_business")
+        except meta_client.MetaApiError as exc:
+            if exc.is_token_error:
+                instagram_service.mark_token_invalid(rt.account_id, exc.message)
+                raise NodeError("A conexão com o Instagram expirou ou foi revogada. Reconecte a conta.") from exc
+            fallback = config.get("on_unknown") == "true"
+            return NodeResult(
+                f"Não foi possível verificar se segue ({exc.message}). Seguindo pelo caminho "
+                f"{'Sim' if fallback else 'Não'}.",
+                handle="true" if fallback else "false",
+                output={"verified": False, "error": exc.message},
+            )
+        follows, source = bool(profile.get("is_user_follow_business")), "API do Instagram"
+    contact["follows"] = follows
+    return NodeResult("Contato segue a conta (Sim)." if follows else "Contato não segue a conta (Não).",
+                      handle="true" if follows else "false",
+                      output={"verified": True, "follows": follows, "source": source})
+
+
 def exec_condition(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
     left = render(config.get("left"), ctx)
     right = render(config.get("value"), ctx)
@@ -378,4 +422,5 @@ EXECUTORS: dict[str, Callable[[dict, dict, Runtime], NodeResult]] = {
     "action.set_variable": exec_set_variable,
     "action.end": exec_end,
     "condition.check": exec_condition,
+    "condition.follows": exec_follows,
 }

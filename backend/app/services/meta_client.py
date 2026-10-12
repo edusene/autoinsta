@@ -215,12 +215,15 @@ def reply_to_comment(token: str, comment_id: str, text: str) -> dict:
     )
 
 
-def get_user_profile(token: str, igsid: str) -> dict:
-    """Só funciona após o usuário enviar mensagem (consentimento)."""
+def get_user_profile(token: str, igsid: str, fields: str = "name,username") -> dict:
+    """Só funciona após o usuário enviar mensagem (consentimento).
+
+    Campos úteis: name, username, is_user_follow_business (a pessoa segue a conta).
+    """
     return _request(
         "GET",
         f"{GRAPH_HOST}/{_version()}/{igsid}",
         "ler perfil do contato",
         token=token,
-        params={"fields": "name,username"},
+        params={"fields": fields},
     )

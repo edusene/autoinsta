@@ -188,7 +188,7 @@ def validate_graph(graph: dict) -> dict:
                 add_warning(nid, "Este nó não está conectado ao fluxo e não será executado.")
 
     for node in by_id.values():
-        if node["type"] == "condition.check":
+        if NODE_TYPES.get(node["type"], {}).get("category") == "condition":
             missing = [h for h in ("true", "false") if (node["id"], h) not in used_handles]
             if len(missing) == 2:
                 add_warning(node["id"], "A condição não tem nenhum caminho conectado.")

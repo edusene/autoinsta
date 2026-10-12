@@ -84,6 +84,35 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     },
   },
   {
+    id: 'follow-gate',
+    name: 'Seguir para receber o link',
+    description: 'Quem manda "EU QUERO" por DM recebe o link se já segue a conta; se não, é convidado a seguir.',
+    graph: {
+      nodes: [
+        node('gatilho', 'trigger.message_received', 260, 20),
+        node('palavra', 'condition.check', 260, 170, {
+          left: '{{message.text}}',
+          operator: 'contains_any',
+          value: 'eu quero, quero, link',
+          case_sensitive: false,
+        }),
+        node('segue', 'condition.follows', 260, 340, { on_unknown: 'false' }),
+        node('link', 'action.send_message', 40, 520, {
+          text: 'Obrigado por seguir, {{contact.username}}! 💜 Aqui está o link: https://seusite.com',
+        }),
+        node('pedir', 'action.send_message', 480, 520, {
+          text: 'Quase lá! Me segue aqui no Instagram e manda "EU QUERO" de novo que eu te envio o link 😉',
+        }),
+      ],
+      edges: [
+        edge('gatilho', 'palavra'),
+        edge('palavra', 'segue', 'true'),
+        edge('segue', 'link', 'true'),
+        edge('segue', 'pedir', 'false'),
+      ],
+    },
+  },
+  {
     id: 'welcome',
     name: 'Boas-vindas a novos contatos',
     description: 'Na 1ª mensagem de alguém, envia uma saudação com o link principal.',

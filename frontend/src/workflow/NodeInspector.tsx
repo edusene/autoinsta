@@ -6,6 +6,7 @@ const VARIABLES = [
   ['{{comment.text}}', 'texto do comentário'],
   ['{{contact.username}}', 'username de quem interagiu'],
   ['{{contact.name}}', 'nome (quando disponível)'],
+  ['{{contact.follows}}', 'true/false, depois da condição "Contato segue a conta?"'],
   ['{{story.url}}', 'link do story (menção ou resposta)'],
   ['{{referral.ref}}', 'origem do link ig.me'],
   ['{{reaction.emoji}}', 'emoji da reação'],
