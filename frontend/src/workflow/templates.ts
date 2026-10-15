@@ -22,9 +22,18 @@ const edge = (source: string, target: string, sourceHandle: string | null = null
   sourceHandle,
 })
 
-const AI_INSTRUCTIONS =
-  'Você é o atendente de uma loja no Instagram. Responda em português, de forma simpática e objetiva, ' +
-  'em no máximo 3 frases. Se não souber a resposta, diga que um atendente humano vai responder em breve.'
+const AI_INSTRUCTIONS = 'Você é o atendente da nossa loja no Instagram. Seja simpático e objetivo.'
+
+// Modo estrito: a IA só usa estes fatos; sem certeza, o sistema envia a resposta fixa
+const AI_STRICT = {
+  mode: 'strict',
+  knowledge: [
+    'Horário de atendimento: segunda a sexta, das 9h às 18h.',
+    'Catálogo e preços: https://seusite.com',
+    'Entrega: para todo o Brasil.',
+  ].join('\n'),
+  fallback_text: 'Boa pergunta! Vou chamar alguém da equipe para te responder certinho. 😊',
+}
 
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
@@ -41,6 +50,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       nodes: [
         node('gatilho', 'trigger.message_received', 80, 40),
         node('ia', 'action.ai', 80, 200, {
+          ...AI_STRICT,
           instructions: AI_INSTRUCTIONS,
           input: '{{message.text}}',
           max_output_tokens: 400,
@@ -68,6 +78,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           text: 'Oi, {{contact.username}}! Nossa tabela de preços está no link da bio. Quer que eu te ajude a escolher?',
         }),
         node('ia', 'action.ai', 480, 360, {
+          ...AI_STRICT,
           instructions: AI_INSTRUCTIONS,
           input: '{{message.text}}',
           max_output_tokens: 400,

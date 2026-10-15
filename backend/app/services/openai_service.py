@@ -40,8 +40,13 @@ def generate_text(
     input_text: str,
     temperature: float | None = None,
     max_output_tokens: int | None = None,
+    json_schema: dict | None = None,
 ) -> dict:
-    """Gera texto. Envia somente as instruções e o texto renderizado do nó (minimização de dados)."""
+    """Gera texto. Envia somente as instruções e o texto renderizado do nó (minimização de dados).
+
+    json_schema: força a resposta nesse formato (Structured Outputs, strict). O texto
+    retornado é o JSON, que quem chamou deve interpretar.
+    """
     params: dict = {
         "model": model,
         "instructions": instructions or None,
@@ -52,6 +57,8 @@ def generate_text(
         params["max_output_tokens"] = max_output_tokens
     if temperature is not None:
         params["temperature"] = temperature
+    if json_schema:
+        params["text"] = {"format": {"type": "json_schema", "name": "resposta", "schema": json_schema, "strict": True}}
 
     client = _client()
     try:

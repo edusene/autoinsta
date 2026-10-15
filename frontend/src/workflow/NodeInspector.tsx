@@ -43,6 +43,14 @@ function FieldInput({ field, value, onChange }: { field: FieldDef; value: unknow
   }
 }
 
+/** Campo com show_if só aparece quando a condição bate (valor atual ou o padrão do campo). */
+function isVisible(field: FieldDef, def: NodeTypeDef, config: Record<string, unknown>): boolean {
+  if (!field.show_if) return true
+  const other = def.fields.find((f) => f.name === field.show_if!.field)
+  const current = config[field.show_if.field] ?? other?.default
+  return current === field.show_if.equals
+}
+
 export function NodeInspector({
   def,
   nodeId,
@@ -79,7 +87,7 @@ export function NodeInspector({
           <ul style={{ margin: 0 }}>{issues.map((i, n) => <li key={n}>{i.message}</li>)}</ul>
         </div>
       )}
-      {def.fields.map((field) => (
+      {def.fields.filter((field) => isVisible(field, def, config)).map((field) => (
         <div key={field.name} className="field">
           {field.type !== 'checkbox' && (
             <label htmlFor={`field-${field.name}`}>

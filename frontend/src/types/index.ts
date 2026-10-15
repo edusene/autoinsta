@@ -49,6 +49,8 @@ export interface FieldDef {
   max?: number
   step?: number
   options?: { value: string; label: string }[]
+  /** Mostra o campo só quando outro campo tem o valor indicado */
+  show_if?: { field: string; equals: unknown }
 }
 
 export interface NodeTypeDef {
