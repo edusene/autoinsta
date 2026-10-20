@@ -17,10 +17,11 @@ from flask import current_app
 
 from app import db
 from app.errors import AppError
-from app.repositories import contact_repository, instagram_repository, settings_repository
+from app.repositories import contact_repository, instagram_repository, message_repository, settings_repository
+from app.repositories import execution_repository as exec_repo
 from app.repositories import webhook_event_repository as event_repo
 from app.repositories import workflow_repository
-from app.services import instagram_service, meta_client
+from app.services import instagram_service, messaging_service, meta_client
 from app.tasks import queue
 from app.workflow import engine
 from app.workflow.nodes import (
@@ -216,7 +217,9 @@ class Classified:
     summary: str
     ctx: dict = field(default_factory=dict)
     trigger_event: dict = field(default_factory=dict)
-    is_dm: bool = False                       # conversa por DM: conta para "Novo contato"
+    is_dm: bool = False                       # conversa por DM: conta para "Novo contato" e vai para a caixa de entrada
+    button_payload: str | None = None         # clique em botão / resposta rápida
+    inbox_text: str | None = None             # texto completo para a caixa de entrada
 
 
 def _classify(event: dict, account: dict) -> Classified | str:
@@ -225,7 +228,7 @@ def _classify(event: dict, account: dict) -> Classified | str:
     kind = event["field"]
     own_id = account["ig_user_id"]
 
-    if kind in ("messages", "messaging_referral", "message_reactions"):
+    if kind in ("messages", "messaging_referral", "message_reactions", "messaging_postbacks"):
         sender_id = str((item.get("sender") or {}).get("id", ""))
         if not sender_id:
             return "Evento sem remetente."
@@ -257,8 +260,19 @@ def _classify(event: dict, account: dict) -> Classified | str:
             return Classified([IG_ME_LINK_TRIGGER, MESSAGE_TRIGGER], sender_id, None,
                               f"[link ig.me {ctx['referral']['ref']}] {text}"[:200], ctx,
                               {"message_id": message.get("mid"), "ref": ctx["referral"]["ref"]}, is_dm=True)
+        quick_reply = (message.get("quick_reply") or {}).get("payload")
         return Classified([MESSAGE_TRIGGER], sender_id, None, text[:200] or "[mensagem sem texto]", ctx,
-                          {"message_id": message.get("mid")}, is_dm=True)
+                          {"message_id": message.get("mid")}, is_dm=True, button_payload=quick_reply,
+                          inbox_text=text or ("[anexo]" if attachments else "[mensagem sem texto]"))
+
+    if kind == "messaging_postbacks":
+        postback = item.get("postback") or {}
+        title = str(postback.get("title") or "")
+        ctx = {"message": {"id": postback.get("mid"), "text": title}}
+        # Sem gatilho próprio: o clique só retoma o fluxo que enviou o botão (e conta no CTR)
+        return Classified([], sender_id, None, f"[clicou no botão] {title}"[:200], ctx,
+                          {"message_id": postback.get("mid")}, is_dm=True, button_payload=postback.get("payload"),
+                          inbox_text=f"[clicou no botão] {title}")
 
     if kind == "messaging_referral":
         referral = item.get("referral") or {}
@@ -328,6 +342,9 @@ def process_event(event_id: str) -> None:
         with db.connection() as conn:
             instagram_repository.mark_webhook_received(conn, account["id"])
 
+    if event["field"] == "messages" and not simulated:
+        _record_echo(event, account)
+
     classified = _classify(event, account)
     if isinstance(classified, str):
         return _ignore(event_id, classified, account)
@@ -347,6 +364,33 @@ def process_event(event_id: str) -> None:
                                                        classified.sender_username, event["field"])
         contact_repository.add_event(conn, user_id, contact["id"], event["field"], classified.summary,
                                      {"webhook_event_id": str(event_id)})
+        if classified.is_dm and not simulated:
+            mid = (classified.ctx.get("message") or {}).get("id")
+            text = classified.inbox_text or classified.summary
+            if message_repository.insert_inbound_if_new(conn, user_id=user_id, account_id=str(account["id"]),
+                                                        contact_id=str(contact["id"]), kind=event["field"],
+                                                        text=text, mid=mid):
+                contact_repository.touch_inbound(conn, contact["id"], text)
+        targets = _waiting_targets(conn, contact, classified, event["field"])
+        settings = settings_repository.get(conn, user_id)
+
+    if contact.get("automation_paused"):
+        with db.connection() as conn:
+            event_repo.set_status(conn, event_id, "processed",
+                                  "Automação pausada para este contato (atendimento humano).",
+                                  str(account["id"]), user_id)
+        return
+
+    # Resposta/clique de quem está num fluxo em espera: retoma esse fluxo em vez de disparar outros
+    if targets:
+        with db.connection() as conn:
+            event_repo.set_status(conn, event_id, "processed", "Resposta usada por um fluxo em espera.",
+                                  str(account["id"]), user_id)
+        resumed = [engine.resume_wait(*target) for target in targets]
+        if any(resumed):
+            return
+
+    with db.connection() as conn:
         # 1º gatilho da lista com workflows ativos (ex.: resposta ao story -> mensagem recebida)
         selected: list[tuple[str, dict]] = []
         for trigger in classified.triggers:
@@ -357,7 +401,6 @@ def process_event(event_id: str) -> None:
         if classified.is_dm and contact.get("inserted"):
             selected += [(NEW_CONTACT_TRIGGER, w)
                          for w in workflow_repository.list_active_by_trigger(conn, user_id, NEW_CONTACT_TRIGGER)]
-        settings = settings_repository.get(conn, user_id)
         # Marca como processado ANTES de executar: um retry do job não duplica mensagens enviadas.
         event_repo.set_status(conn, event_id, "processed", f"{len(selected)} workflow(s) compatível(is).",
                               str(account["id"]), user_id)
@@ -378,6 +421,55 @@ def process_event(event_id: str) -> None:
             engine.start(workflow, json.loads(json.dumps(ctx)), trigger_event, str(contact["id"]), str(event_id))
         except Exception:  # noqa: BLE001 - um workflow com problema não bloqueia os outros
             logger.exception("Falha ao iniciar workflow %s para o evento %s", workflow["id"], event_id)
+
+
+def _waiting_targets(conn, contact: dict, classified: Classified, field: str) -> list[tuple]:
+    """Execuções que esta resposta deve retomar: argumentos para engine.resume_wait().
+
+    - clique em botão/resposta rápida enviado por um fluxo -> retoma pela saída do botão (e conta no CTR);
+    - DM de texto -> retoma quem está em "Aguardar resposta" pela saída "Respondeu".
+    """
+    parsed = messaging_service.parse_payload(classified.button_payload)
+    if parsed:
+        message_id, button_id = parsed
+        sent = message_repository.get(conn, message_id)
+        if not sent or str(sent["contact_id"]) != str(contact["id"]) or sent["direction"] != "out":
+            return []
+        message_repository.mark_clicked(conn, message_id)
+        if not sent["execution_id"]:
+            return []
+        title = next((b.get("title") for b in sent["buttons"] or [] if b.get("id") == button_id), button_id)
+        updates = {"button": {"id": button_id, "title": title},
+                   "message": {**(classified.ctx.get("message") or {}), "text": title}}
+        return [(str(sent["execution_id"]), ["button"], button_id, f'Contato clicou em "{title}".',
+                 updates, sent["node_id"])]
+    if field != "messages" or MESSAGE_TRIGGER not in classified.triggers:
+        return []
+    message = classified.ctx.get("message") or {}
+    text = str(message.get("text") or "")
+    return [
+        (str(row["id"]), ["reply"], "replied", f"Contato respondeu: {text[:120] or '[sem texto]'}",
+         {"message": message, "reply": {"text": text}}, row["current_node_id"])
+        for row in exec_repo.list_waiting_for_contact(conn, contact["id"], "reply")
+    ]
+
+
+def _record_echo(event: dict, account: dict) -> None:
+    """Mensagem enviada pela conta no app do Instagram: entra na conversa (as da plataforma já estão lá)."""
+    item = event["payload"] or {}
+    message = item.get("message") or {}
+    if not message.get("is_echo"):
+        return
+    recipient = str((item.get("recipient") or {}).get("id", ""))
+    with db.connection() as conn:
+        contact = contact_repository.get_by_ig_id(conn, str(account["id"]), recipient)
+        if not contact:
+            return
+        text = message.get("text") or "[anexo]"
+        if message_repository.insert_echo_if_new(conn, user_id=str(account["user_id"]),
+                                                 account_id=str(account["id"]), contact_id=str(contact["id"]),
+                                                 text=text, mid=message.get("mid")):
+            contact_repository.touch_outbound(conn, contact["id"], text)
 
 
 SIMULATION_PREFIX = "sim:"
@@ -454,6 +546,8 @@ def _summarize(event: dict) -> dict:
             text = message.get("text") or ""
         return {"text": text[:300], "from": sender, "is_echo": bool(message.get("is_echo")),
                 "has_attachments": bool(attachments)}
+    if field == "messaging_postbacks":
+        return {"text": f"[clicou no botão] {(item.get('postback') or {}).get('title') or ''}", "from": sender}
     if field == "messaging_referral":
         return {"text": f"[link ig.me {(item.get('referral') or {}).get('ref') or ''}]", "from": sender}
     if field == "message_reactions":

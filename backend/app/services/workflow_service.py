@@ -5,7 +5,7 @@ import uuid
 
 from app import db
 from app.errors import AppError, NotFoundError
-from app.repositories import instagram_repository
+from app.repositories import instagram_repository, message_repository
 from app.repositories import workflow_repository as repo
 from app.workflow.nodes import MESSAGE_TRIGGER
 from app.workflow.validator import normalize_graph, trigger_type_of, validate_graph
@@ -109,3 +109,11 @@ def deactivate_workflow(user_id: str, workflow_id: str) -> dict:
         updated = repo.update(conn, user_id, workflow_id, {"status": "inactive"})
     logger.info("Workflow desativado: %s (user=%s)", workflow_id, user_id)
     return updated
+
+
+def node_stats(user_id: str, workflow_id: str) -> dict:
+    get_workflow(user_id, workflow_id)
+    with db.connection() as conn:
+        rows = message_repository.ctr_by_node(conn, user_id, workflow_id)
+    return {str(r["node_id"]): {"sent": r["sent"], "trackable": r["trackable"], "clicked": r["clicked"]}
+            for r in rows if r["node_id"]}

@@ -14,6 +14,9 @@ import { TermsPage } from './pages/TermsPage'
 import { NewWorkflowPage, WorkflowsPage } from './pages/WorkflowsPage'
 
 const WorkflowEditorPage = lazy(() => import('./workflow/WorkflowEditor').then((m) => ({ default: m.WorkflowEditorPage })))
+const InboxPage = lazy(() => import('./pages/InboxPage').then((m) => ({ default: m.InboxPage })))
+const BroadcastsPage = lazy(() => import('./pages/BroadcastsPage').then((m) => ({ default: m.BroadcastsPage })))
+const BroadcastEditorPage = lazy(() => import('./pages/BroadcastsPage').then((m) => ({ default: m.BroadcastEditorPage })))
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -44,6 +47,10 @@ export default function App() {
             <Route path="/workflows/:id/logs" element={<LogsPage />} />
             <Route path="/instagram" element={<InstagramPage />} />
             <Route path="/instagram/callback" element={<InstagramCallbackPage />} />
+            <Route path="/inbox" element={<Suspense fallback={<Loading />}><InboxPage /></Suspense>} />
+            <Route path="/inbox/:contactId" element={<Suspense fallback={<Loading />}><InboxPage /></Suspense>} />
+            <Route path="/broadcasts" element={<Suspense fallback={<Loading />}><BroadcastsPage /></Suspense>} />
+            <Route path="/broadcasts/:id" element={<Suspense fallback={<Loading />}><BroadcastEditorPage /></Suspense>} />
             <Route path="/contacts" element={<ContactsPage />} />
             <Route path="/logs" element={<LogsPage />} />
             <Route path="/settings" element={<SettingsPage />} />

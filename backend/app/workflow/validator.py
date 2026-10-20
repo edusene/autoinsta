@@ -3,7 +3,8 @@
 - normalize_graph(): mantém apenas os campos conhecidos (o frontend não grava lixo no banco).
 - validate_graph(): devolve erros (impedem ativação) e avisos.
 """
-from app.workflow.nodes import IDENTIFIER_RE, NODE_TYPES
+from app.services.messaging_service import validate_buttons
+from app.workflow.nodes import IDENTIFIER_RE, NODE_TYPES, TAG_RE, node_outputs
 
 MAX_NODES = 100
 MAX_EDGES = 200
@@ -56,7 +57,7 @@ def _validate_config(node: dict, definition: dict, add_error) -> None:
     for f in definition["fields"]:
         name, label = f["name"], f["label"]
         value = config.get(name)
-        empty = value is None or (isinstance(value, str) and not value.strip())
+        empty = value is None or (isinstance(value, (str, list)) and not (value.strip() if isinstance(value, str) else value))
         if empty:
             if f.get("required"):
                 add_error(node["id"], f"Preencha o campo '{label}'.")
@@ -70,6 +71,8 @@ def _validate_config(node: dict, definition: dict, add_error) -> None:
                 add_error(node["id"], f"'{label}' excede {f['max_length']} caracteres.")
             if f.get("pattern") == "identifier" and not IDENTIFIER_RE.match(value):
                 add_error(node["id"], f"'{label}' deve conter apenas letras, números e _ (sem espaços).")
+            if f.get("pattern") == "tag" and not TAG_RE.match(value.strip()):
+                add_error(node["id"], f"'{label}' deve ter até 40 caracteres: letras, números, espaço, - ou _.")
         elif ftype == "number":
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 add_error(node["id"], f"'{label}' deve ser um número.")
@@ -81,6 +84,9 @@ def _validate_config(node: dict, definition: dict, add_error) -> None:
         elif ftype == "select":
             if value not in {o["value"] for o in f["options"]}:
                 add_error(node["id"], f"Valor inválido em '{label}'.")
+        elif ftype == "buttons":
+            for problem in validate_buttons(value, config.get("style") or "buttons")[:3]:
+                add_error(node["id"], problem)
         elif ftype == "checkbox" and not isinstance(value, bool):
             add_error(node["id"], f"'{label}' deve ser verdadeiro ou falso.")
 
@@ -144,7 +150,7 @@ def validate_graph(graph: dict) -> dict:
         if not src_def or not dst_def:
             continue
         handle = edge["sourceHandle"] or "default"
-        if handle not in src_def["outputs"]:
+        if handle not in node_outputs(src):
             add_error(src["id"], f"Saída '{handle}' inválida para '{src_def['label']}'.")
             continue
         if dst_def["category"] == "trigger":

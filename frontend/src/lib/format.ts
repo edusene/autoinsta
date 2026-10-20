@@ -35,3 +35,19 @@ export const TRIGGER_LABELS: Record<string, string> = {
   'trigger.message_reaction': 'Reação a mensagem',
   'trigger.live_comment': 'Comentário em live',
 }
+
+/** CTR = mensagens com clique / mensagens com link rastreado ou botão. */
+export function ctrPercent(trackable: number, clicked: number): string {
+  if (!trackable) return '—'
+  const pct = (clicked / trackable) * 100
+  return `${pct >= 10 || pct === 0 ? Math.round(pct) : pct.toFixed(1)}%`
+}
+
+/** Tempo restante até uma data (ex.: fim da janela de 24h). */
+export function timeLeft(value: string | null | undefined): string {
+  if (!value) return ''
+  const minutes = Math.round((new Date(value).getTime() - Date.now()) / 60_000)
+  if (minutes <= 0) return 'encerrada'
+  if (minutes < 60) return `${minutes} min`
+  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}`
+}

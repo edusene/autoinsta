@@ -30,6 +30,9 @@ class Config:
     # URL pública do frontend (redirects) e origens permitidas no CORS
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
     CORS_ORIGINS = _list("CORS_ORIGINS", FRONTEND_URL)
+    # Endereço público do serviço, usado nos links rastreados (/r/<código>). Padrão: FRONTEND_URL
+    # (no deploy de serviço único, painel e API ficam no mesmo endereço).
+    PUBLIC_URL = (os.getenv("PUBLIC_URL", "").strip() or FRONTEND_URL).rstrip("/")
 
     # Banco (Postgres do Supabase — conexão direta ou pooler em modo sessão)
     DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -84,6 +87,7 @@ class TestConfig(Config):
     DEBUG = False
     TESTING = True
     SECRET_KEY = "test-secret-key"
+    PUBLIC_URL = "https://app.example.com"
     DATABASE_URL = os.getenv("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:54329/autoinsta_test")
     SUPABASE_URL = "https://test.supabase.co"
     SUPABASE_JWT_SECRET = "test-jwt-secret-with-at-least-32-bytes!!"

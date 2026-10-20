@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ConfirmButton, Empty, ErrorAlert, Loading, WorkflowStatusBadge } from '../components/ui'
 import { AUTO_REFRESH_MS, useApi } from '../hooks/useApi'
 import { api, ApiError, errorMessage } from '../lib/api'
-import { formatDateTime, TRIGGER_LABELS } from '../lib/format'
+import { ctrPercent, formatDateTime, TRIGGER_LABELS } from '../lib/format'
 import type { Workflow, WorkflowSummary } from '../types'
 import { WORKFLOW_TEMPLATES, type WorkflowTemplate } from '../workflow/templates'
 
@@ -63,6 +63,7 @@ export function WorkflowsPage() {
                     <th>Gatilho</th>
                     <th>Última atualização</th>
                     <th>Execuções</th>
+                    <th title="Cliques em links rastreados e botões / mensagens com link ou botão">CTR</th>
                     <th style={{ textAlign: 'right' }}>Ações</th>
                   </tr>
                 </thead>
@@ -88,6 +89,9 @@ export function WorkflowsPage() {
                             ({w.errors_count} erro{w.errors_count > 1 ? 's' : ''})
                           </span>
                         )}
+                      </td>
+                      <td title={`${w.clicked_count} clique(s) em ${w.trackable_count} mensagem(ns)`}>
+                        {ctrPercent(w.trackable_count, w.clicked_count)}
                       </td>
                       <td>
                         <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>

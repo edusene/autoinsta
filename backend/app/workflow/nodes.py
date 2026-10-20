@@ -11,12 +11,16 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable
 
-from app.services import instagram_service, meta_client, openai_service
+from app import db
+from app.repositories import contact_repository
+from app.services import instagram_service, messaging_service, meta_client, openai_service
 from app.workflow import conditions
 from app.workflow.template import render, truncate_utf8
 
 MESSAGE_MAX_BYTES = 1000  # limite oficial do texto de mensagens no Instagram
 MAX_DELAY_SECONDS = 23 * 3600  # abaixo da janela de 24h para responder DMs
+MAX_WAIT_MINUTES = 23 * 60
+TAG_RE = re.compile(r"^[\w\- ]{1,40}$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,39}$")
 
 MESSAGE_TRIGGER = "trigger.message_received"
@@ -33,6 +37,10 @@ DM_TRIGGERS = [MESSAGE_TRIGGER, NEW_CONTACT_TRIGGER, STORY_MENTION_TRIGGER, STOR
                IG_ME_LINK_TRIGGER, MESSAGE_REACTION_TRIGGER]
 
 _text_help = "Aceita variáveis como {{contact.username}}, {{message.text}}, {{ai.response}}, {{vars.nome}}."
+
+_track_field = {"name": "track_links", "label": "Rastrear cliques nos links (CTR)", "type": "checkbox",
+                "required": False, "default": True,
+                "help": "Troca os links por um link curto da plataforma para contar os cliques."}
 
 NODE_TYPES: dict[str, dict] = {
     # ----- gatilhos -----
@@ -121,6 +129,32 @@ NODE_TYPES: dict[str, dict] = {
         "fields": [
             {"name": "text", "label": "Mensagem", "type": "textarea", "required": True, "max_length": 1000,
              "help": _text_help},
+            _track_field,
+        ],
+    },
+    "action.send_buttons": {
+        "category": "action",
+        "label": "Mensagem com botões",
+        "description": "Envia uma DM com botões. Cada botão de resposta vira um caminho no fluxo; "
+                       "se a pessoa não clicar no prazo, segue por \"Sem clique\".",
+        "outputs": ["timeout"],
+        "dynamic_outputs": "buttons",
+        "allowed_triggers": DM_TRIGGERS,
+        "fields": [
+            {"name": "text", "label": "Mensagem", "type": "textarea", "required": True, "max_length": 640,
+             "default": "Como posso te ajudar?", "help": _text_help},
+            {"name": "style", "label": "Estilo", "type": "select", "required": True, "default": "buttons",
+             "options": [{"value": "buttons", "label": "Botões (até 3, aceita links)"},
+                         {"value": "quick_replies", "label": "Respostas rápidas (até 13, só texto)"}]},
+            {"name": "buttons", "label": "Botões", "type": "buttons", "required": True,
+             "default": [{"id": "b1", "title": "Quero saber mais", "type": "reply"},
+                         {"id": "b2", "title": "Falar com humano", "type": "reply"}],
+             "help": "Texto de até 20 caracteres. Botões de resposta criam saídas no bloco; "
+                     "botões de link abrem o site."},
+            {"name": "timeout_minutes", "label": "Aguardar clique por (minutos)", "type": "number",
+             "required": True, "default": 60, "min": 1, "max": MAX_WAIT_MINUTES,
+             "help": "Depois disso o fluxo segue por \"Sem clique\". Máximo de 23h (janela de 24h da Meta)."},
+            _track_field,
         ],
     },
     "action.private_reply": {
@@ -132,6 +166,7 @@ NODE_TYPES: dict[str, dict] = {
         "fields": [
             {"name": "text", "label": "Mensagem", "type": "textarea", "required": True, "max_length": 1000,
              "help": _text_help},
+            _track_field,
         ],
     },
     "action.reply_comment": {
@@ -154,6 +189,18 @@ NODE_TYPES: dict[str, dict] = {
             {"name": "seconds", "label": "Segundos", "type": "number", "required": True, "default": 30,
              "min": 1, "max": MAX_DELAY_SECONDS,
              "help": "Máximo de 23h: depois de 24h a Meta não permite mais responder a DM."},
+        ],
+    },
+    "action.wait_reply": {
+        "category": "action",
+        "label": "Aguardar resposta (follow-up)",
+        "description": "Espera o contato responder. Se responder, segue por \"Respondeu\" "
+                       "({{reply.text}}); se não, segue por \"Sem resposta\" para enviar um follow-up.",
+        "outputs": ["replied", "timeout"],
+        "fields": [
+            {"name": "timeout_minutes", "label": "Aguardar por (minutos)", "type": "number", "required": True,
+             "default": 60, "min": 1, "max": MAX_WAIT_MINUTES,
+             "help": "Máximo de 23h: depois da janela de 24h a Meta não permite enviar o follow-up."},
         ],
     },
     "action.ai": {
@@ -205,6 +252,25 @@ NODE_TYPES: dict[str, dict] = {
              "options": [{"value": "set", "label": "Substituir"}, {"value": "append", "label": "Acrescentar ao final"}]},
         ],
     },
+    "action.add_tag": {
+        "category": "action",
+        "label": "Adicionar tag",
+        "description": "Marca o contato com uma tag (use para segmentar disparos em massa).",
+        "outputs": ["default"],
+        "fields": [
+            {"name": "tag", "label": "Tag", "type": "text", "required": True, "max_length": 40, "pattern": "tag",
+             "help": "Ex.: cliente, interessado, promo-natal."},
+        ],
+    },
+    "action.remove_tag": {
+        "category": "action",
+        "label": "Remover tag",
+        "description": "Remove uma tag do contato.",
+        "outputs": ["default"],
+        "fields": [
+            {"name": "tag", "label": "Tag", "type": "text", "required": True, "max_length": 40, "pattern": "tag"},
+        ],
+    },
     "action.end": {
         "category": "action",
         "label": "Finalizar",
@@ -225,6 +291,15 @@ NODE_TYPES: dict[str, dict] = {
              "options": [{"value": "false", "label": "Não (tratar como não seguidor)"},
                          {"value": "true", "label": "Sim (tratar como seguidor)"}],
              "help": "Acontece quando a pessoa ainda não mandou DM (ex.: só comentou)."},
+        ],
+    },
+    "condition.has_tag": {
+        "category": "condition",
+        "label": "Contato tem a tag?",
+        "description": "Segue pelo caminho Sim se o contato tem a tag.",
+        "outputs": ["true", "false"],
+        "fields": [
+            {"name": "tag", "label": "Tag", "type": "text", "required": True, "max_length": 40, "pattern": "tag"},
         ],
     },
     "condition.check": {
@@ -249,6 +324,20 @@ def catalog() -> list[dict]:
     return [{"type": t, **d} for t, d in NODE_TYPES.items()]
 
 
+def reply_buttons(config: dict) -> list[dict]:
+    return [b for b in config.get("buttons") or []
+            if isinstance(b, dict) and (b.get("type") or "reply") == "reply" and b.get("id")]
+
+
+def node_outputs(node: dict) -> list[str]:
+    """Saídas do nó. Na mensagem com botões, cada botão de resposta é uma saída (+ "Sem clique")."""
+    definition = NODE_TYPES.get(node["type"], {})
+    if definition.get("dynamic_outputs") == "buttons":
+        replies = [str(b["id"]) for b in reply_buttons(node["data"]["config"])]
+        return [*replies, "timeout"] if replies else ["default"]
+    return definition.get("outputs", [])
+
+
 # ---------------------------------------------------------------------------
 # Execução
 # ---------------------------------------------------------------------------
@@ -262,6 +351,8 @@ class NodeResult:
     message: str
     handle: str = "default"
     delay_seconds: int | None = None
+    wait_for: str | None = None  # "reply" | "button": pausa até o contato responder/clicar (ou o prazo)
+    wait_seconds: int | None = None
     stop: bool = False
     output: dict = field(default_factory=dict)
 
@@ -271,6 +362,8 @@ class Runtime:
     user_id: str
     account_id: str
     execution_id: str
+    workflow_id: str | None = None
+    node_id: str | None = None  # nó em execução (definido pelo engine)
     dry_run: bool = False  # eventos simulados: nada é enviado ao Instagram
     _token: str | None = None
 
@@ -281,7 +374,7 @@ class Runtime:
 
 
 # Nós que enviam algo ao Instagram (no modo simulado, apenas registram o que seria enviado)
-SENDING_NODES = {"action.send_message", "action.private_reply", "action.reply_comment"}
+SENDING_NODES = {"action.send_message", "action.private_reply", "action.reply_comment", "action.send_buttons"}
 
 
 def _meta_call(runtime: Runtime, fn: Callable, *args) -> dict:
@@ -304,14 +397,31 @@ def _message_text(config: dict, ctx: dict, max_bytes: int = MESSAGE_MAX_BYTES) -
     return truncated, truncated != text
 
 
+def _send_dm(rt: Runtime, ctx: dict, config: dict, text: str, **kwargs) -> dict:
+    """Envia pela messaging_service (registra na conversa e rastreia links)."""
+    contact = ctx.get("contact") or {}
+
+    def call(token: str) -> dict:
+        return messaging_service.send(
+            token=token, user_id=rt.user_id, account_id=rt.account_id, contact_id=contact.get("id"), text=text,
+            recipient_igsid=contact.get("ig_id"), track_links=bool(config.get("track_links")), source="workflow",
+            workflow_id=rt.workflow_id, node_id=rt.node_id, execution_id=rt.execution_id, **kwargs,
+        )
+    return _meta_call(rt, call)
+
+
+def _sent_output(resp: dict, text: str, truncated: bool) -> dict:
+    return {"text": resp.get("text", text), "truncated": truncated, "message_id": resp.get("mid"),
+            "tracked_links": resp.get("tracked_links", 0)}
+
+
 def exec_send_message(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
     recipient = (ctx.get("contact") or {}).get("ig_id")
     if not recipient:
         raise NodeError("Contato sem ID do Instagram para envio.")
     text, truncated = _message_text(config, ctx)
-    resp = _meta_call(rt, meta_client.send_text_message, recipient, text)
-    return NodeResult("Mensagem enviada.", output={"text": text, "truncated": truncated,
-                                                   "message_id": resp.get("message_id")})
+    resp = _send_dm(rt, ctx, config, text)
+    return NodeResult("Mensagem enviada.", output=_sent_output(resp, text, truncated))
 
 
 def exec_private_reply(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
@@ -321,10 +431,90 @@ def exec_private_reply(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
     if ctx.get("_sys", {}).get("private_reply_sent"):
         raise NodeError("A Meta permite apenas uma resposta privada por comentário.")
     text, truncated = _message_text(config, ctx)
-    resp = _meta_call(rt, meta_client.send_private_reply, comment_id, text)
+    resp = _send_dm(rt, ctx, config, text, comment_id=comment_id)
     ctx.setdefault("_sys", {})["private_reply_sent"] = True
-    return NodeResult("Resposta privada enviada.", output={"text": text, "truncated": truncated,
-                                                           "message_id": resp.get("message_id")})
+    return NodeResult("Resposta privada enviada.", output=_sent_output(resp, text, truncated))
+
+
+def _minutes(value) -> int:
+    try:
+        minutes = int(value or 60)
+    except (TypeError, ValueError):
+        minutes = 60
+    return max(1, min(minutes, MAX_WAIT_MINUTES))
+
+
+def _format_minutes(minutes: int) -> str:
+    return f"{minutes // 60}h{minutes % 60:02d}" if minutes >= 60 else f"{minutes} min"
+
+
+def exec_send_buttons(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
+    if not (ctx.get("contact") or {}).get("ig_id"):
+        raise NodeError("Contato sem ID do Instagram para envio.")
+    style = config.get("style") if config.get("style") in ("buttons", "quick_replies") else "buttons"
+    text = render(config.get("text"), ctx).strip()
+    if not text:
+        raise NodeError("O texto da mensagem ficou vazio após substituir as variáveis.")
+    buttons = []
+    for b in config.get("buttons") or []:
+        if not isinstance(b, dict):
+            continue
+        b = {**b, "title": render(b.get("title"), ctx).strip()[:20]}
+        if (b.get("type") or "reply") == "url":
+            b["url"] = render(b.get("url"), ctx).strip()
+        buttons.append(b)
+    problems = messaging_service.validate_buttons(buttons, style)
+    if problems:
+        raise NodeError(problems[0])
+    resp = _send_dm(rt, ctx, config, text, buttons=buttons, style=style)
+    output = {**_sent_output(resp, text, False), "buttons": [b["title"] for b in buttons]}
+    if not reply_buttons(config):
+        return NodeResult("Mensagem com botões enviada.", output=output)
+    minutes = _minutes(config.get("timeout_minutes"))
+    return NodeResult(f"Mensagem com botões enviada. Aguardando clique por até {_format_minutes(minutes)}.",
+                      wait_for="button", wait_seconds=minutes * 60, output=output)
+
+
+def exec_wait_reply(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
+    minutes = _minutes(config.get("timeout_minutes"))
+    return NodeResult(f"Aguardando resposta do contato por até {_format_minutes(minutes)}.",
+                      wait_for="reply", wait_seconds=minutes * 60, output={"timeout_minutes": minutes})
+
+
+def _tag(config: dict) -> str:
+    tag = str(config.get("tag") or "").strip().lower()
+    if not TAG_RE.match(tag):
+        raise NodeError("Tag inválida (use letras, números, espaço, - ou _; até 40 caracteres).")
+    return tag
+
+
+def _contact_id(ctx: dict) -> str:
+    contact_id = (ctx.get("contact") or {}).get("id")
+    if not contact_id:
+        raise NodeError("Execução sem contato.")
+    return contact_id
+
+
+def exec_add_tag(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
+    tag = _tag(config)
+    with db.connection() as conn:
+        contact_repository.add_tag(conn, _contact_id(ctx), tag)
+    return NodeResult(f"Tag '{tag}' adicionada ao contato.", output={"tag": tag})
+
+
+def exec_remove_tag(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
+    tag = _tag(config)
+    with db.connection() as conn:
+        contact_repository.remove_tag(conn, _contact_id(ctx), tag)
+    return NodeResult(f"Tag '{tag}' removida do contato.", output={"tag": tag})
+
+
+def exec_has_tag(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
+    tag = _tag(config)
+    with db.connection() as conn:
+        has = tag in contact_repository.get_tags(conn, _contact_id(ctx))
+    return NodeResult(f"Contato {'tem' if has else 'não tem'} a tag '{tag}' ({'Sim' if has else 'Não'}).",
+                      handle="true" if has else "false", output={"tag": tag, "result": has})
 
 
 def exec_reply_comment(config: dict, ctx: dict, rt: Runtime) -> NodeResult:
@@ -511,6 +701,11 @@ EXECUTORS: dict[str, Callable[[dict, dict, Runtime], NodeResult]] = {
     "action.send_message": exec_send_message,
     "action.private_reply": exec_private_reply,
     "action.reply_comment": exec_reply_comment,
+    "action.send_buttons": exec_send_buttons,
+    "action.wait_reply": exec_wait_reply,
+    "action.add_tag": exec_add_tag,
+    "action.remove_tag": exec_remove_tag,
+    "condition.has_tag": exec_has_tag,
     "action.delay": exec_delay,
     "action.ai": exec_ai,
     "action.set_variable": exec_set_variable,

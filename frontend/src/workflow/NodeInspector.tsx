@@ -1,5 +1,6 @@
-import type { FieldDef, NodeTypeDef, ValidationIssue } from '../types'
-import { CATEGORY_META } from './catalog'
+import type { FieldDef, FlowButton, NodeTypeDef, ValidationIssue } from '../types'
+import { CATEGORY_META, configButtons, iconFor } from './catalog'
+import { Icon } from './Icon'
 
 const VARIABLES = [
   ['{{message.text}}', 'texto da DM recebida'],
@@ -10,13 +11,74 @@ const VARIABLES = [
   ['{{story.url}}', 'link do story (menção ou resposta)'],
   ['{{referral.ref}}', 'origem do link ig.me'],
   ['{{reaction.emoji}}', 'emoji da reação'],
+  ['{{reply.text}}', 'resposta do contato (após "Aguardar resposta")'],
+  ['{{button.title}}', 'botão clicado (após "Mensagem com botões")'],
   ['{{ai.response}}', 'última resposta da IA'],
   ['{{vars.nome}}', 'variável definida no fluxo'],
 ]
 
-function FieldInput({ field, value, onChange }: { field: FieldDef; value: unknown; onChange: (v: unknown) => void }) {
+function newButtonId(buttons: FlowButton[]): string {
+  let n = buttons.length + 1
+  while (buttons.some((b) => b.id === `b${n}`)) n++
+  return `b${n}`
+}
+
+function ButtonsField({ value, style, onChange }: { value: FlowButton[]; style: string; onChange: (v: FlowButton[]) => void }) {
+  const quick = style === 'quick_replies'
+  const max = quick ? 13 : 3
+  const update = (i: number, patch: Partial<FlowButton>) => onChange(value.map((b, n) => (n === i ? { ...b, ...patch } : b)))
+  const move = (i: number, delta: number) => {
+    const next = [...value]
+    const [item] = next.splice(i, 1)
+    next.splice(i + delta, 0, item)
+    onChange(next)
+  }
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      {value.map((b, i) => (
+        <div key={b.id} className="inspector-button">
+          <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+            <input className="input" placeholder="Texto do botão" maxLength={20} value={b.title}
+              onChange={(e) => update(i, { title: e.target.value })} aria-label={`Texto do botão ${i + 1}`} />
+            {!quick && (
+              <select className="select" style={{ width: 110 }} value={b.type ?? 'reply'} aria-label="Tipo do botão"
+                onChange={(e) => update(i, { type: e.target.value as FlowButton['type'], url: e.target.value === 'url' ? b.url ?? 'https://' : undefined })}>
+                <option value="reply">Resposta</option>
+                <option value="url">Link</option>
+              </select>
+            )}
+          </div>
+          {b.type === 'url' && !quick && (
+            <input className="input" placeholder="https://…" value={b.url ?? ''} onChange={(e) => update(i, { url: e.target.value })}
+              aria-label={`Link do botão ${i + 1}`} />
+          )}
+          <div className="row small muted" style={{ gap: 4 }}>
+            <span>{b.title.length}/20</span>
+            <span className="spacer" />
+            <button type="button" className="btn btn-sm btn-ghost" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Subir">↑</button>
+            <button type="button" className="btn btn-sm btn-ghost" disabled={i === value.length - 1} onClick={() => move(i, 1)} aria-label="Descer">↓</button>
+            <button type="button" className="btn btn-sm btn-ghost btn-danger" onClick={() => onChange(value.filter((_, n) => n !== i))}>Remover</button>
+          </div>
+        </div>
+      ))}
+      {value.length < max && (
+        <button type="button" className="btn btn-sm" style={{ alignSelf: 'flex-start' }}
+          onClick={() => onChange([...value, { id: newButtonId(value), title: '', type: 'reply' }])}>
+          + Adicionar botão
+        </button>
+      )}
+      {quick && value.some((b) => b.type === 'url') && (
+        <div className="alert alert-warning small">Respostas rápidas não aceitam links. Mude o estilo para “Botões”.</div>
+      )}
+    </div>
+  )
+}
+
+function FieldInput({ field, value, config, onChange }: { field: FieldDef; value: unknown; config: Record<string, unknown>; onChange: (v: unknown) => void }) {
   const id = `field-${field.name}`
   switch (field.type) {
+    case 'buttons':
+      return <ButtonsField value={configButtons(config)} style={String(config.style ?? 'buttons')} onChange={onChange} />
     case 'textarea':
       return <textarea id={id} className="textarea" value={String(value ?? '')} maxLength={field.max_length}
         onChange={(e) => onChange(e.target.value)} />
@@ -77,10 +139,13 @@ export function NodeInspector({
   const meta = CATEGORY_META[def.category]
   return (
     <div className="inspector-body">
-      <div>
-        <div className="flow-node-kind" style={{ color: meta.color }}>{meta.label}</div>
-        <h2 style={{ marginTop: 2 }}>{def.label}</h2>
-        <p className="small muted" style={{ marginTop: 6 }}>{def.description}</p>
+      <div className="row" style={{ alignItems: 'flex-start', flexWrap: 'nowrap', gap: 12 }}>
+        <span className="inspector-icon" style={{ background: meta.color }}><Icon name={iconFor(def.type)} size={18} /></span>
+        <div>
+          <div className="flow-node-kind" style={{ color: meta.color }}>{meta.label}</div>
+          <h2 style={{ marginTop: 2 }}>{def.label}</h2>
+          <p className="small muted" style={{ marginTop: 6 }}>{def.description}</p>
+        </div>
       </div>
       {issues.length > 0 && (
         <div className="alert alert-error">
@@ -95,7 +160,7 @@ export function NodeInspector({
               {field.required && <span style={{ color: 'var(--danger)' }}> *</span>}
             </label>
           )}
-          <FieldInput field={field} value={config[field.name]}
+          <FieldInput field={field} value={config[field.name]} config={config}
             onChange={(v) => onChange({ ...config, [field.name]: v })} />
           {field.help && <span className="help">{field.help}</span>}
         </div>
@@ -119,10 +184,11 @@ export function EditorHelp() {
       <h2>Como montar o fluxo</h2>
       <ol className="small muted" style={{ paddingLeft: 18, margin: 0, lineHeight: 1.7 }}>
         <li>Comece pelo <strong>gatilho</strong>: DM, novo contato, story, link ig.me, reação ou comentário.</li>
-        <li>Clique nos blocos à esquerda para adicioná-los.</li>
-        <li>Arraste da bolinha de baixo de um bloco até outro para conectar.</li>
-        <li>Condições têm duas saídas: <span style={{ color: 'var(--success)' }}>Sim</span> e <span style={{ color: 'var(--danger)' }}>Não</span>.</li>
-        <li>Selecione um bloco para configurar. Delete/Backspace remove o item selecionado.</li>
+        <li><strong>Arraste</strong> os blocos da esquerda para o quadro (ou clique para adicionar no centro).</li>
+        <li>Puxe da bolinha de saída de um bloco até outro para conectar. Clique numa conexão para removê-la.</li>
+        <li>Condições têm as saídas <span style={{ color: 'var(--success)' }}>Sim</span> e <span style={{ color: 'var(--danger)' }}>Não</span>; cada botão de resposta e o “Aguardar resposta” também criam caminhos.</li>
+        <li>Arraste o fundo para mover o quadro; use a roda do mouse para zoom e “Organizar” para alinhar tudo.</li>
+        <li>Atalhos: Delete remove, Ctrl+D duplica, Ctrl+S salva.</li>
         <li>Salve, valide e ative.</li>
       </ol>
       <h3 style={{ marginTop: 8 }}>Variáveis</h3>

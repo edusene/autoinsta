@@ -99,6 +99,13 @@ def deactivate(workflow_id):
     return ok(workflow_service.deactivate_workflow(current_user_id(), str(workflow_id)))
 
 
+@bp.get("/<uuid:workflow_id>/stats")
+@require_auth
+def stats(workflow_id):
+    """Envios e cliques (CTR) por nó."""
+    return ok(workflow_service.node_stats(current_user_id(), str(workflow_id)))
+
+
 @bp.get("/<uuid:workflow_id>/executions")
 @require_auth
 def executions(workflow_id):

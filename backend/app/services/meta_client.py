@@ -6,7 +6,7 @@ Somente endpoints confirmados na documentação oficial (Graph API v25.0):
   - GET  https://graph.instagram.com/refresh_access_token       (renova token longo)
   - GET  https://graph.instagram.com/{v}/me                     (perfil profissional)
   - POST https://graph.instagram.com/{v}/me/subscribed_apps     (ativa webhooks da conta)
-  - POST https://graph.instagram.com/{v}/me/messages            (DM e resposta privada)
+  - POST https://graph.instagram.com/{v}/me/messages            (DM, resposta privada, botões e respostas rápidas)
   - POST https://graph.instagram.com/{v}/{comment_id}/replies   (resposta pública)
   - GET  https://graph.instagram.com/{v}/{igsid}                (perfil do contato)
 
@@ -32,7 +32,9 @@ REQUIRED_SCOPES = [
     "instagram_business_manage_comments",
 ]
 # messages também traz menções e respostas a stories; os demais alimentam os outros gatilhos
-WEBHOOK_FIELDS = ["messages", "comments", "messaging_referral", "message_reactions", "live_comments"]
+# messaging_postbacks: cliques nos botões (template de botões)
+WEBHOOK_FIELDS = ["messages", "comments", "messaging_referral", "message_reactions", "live_comments",
+                  "messaging_postbacks"]
 
 # Códigos de erro da Graph API que indicam token inválido/expirado/revogado.
 TOKEN_ERROR_CODES = {190}
@@ -191,6 +193,29 @@ def send_text_message(token: str, recipient_igsid: str, text: str) -> dict:
         "enviar mensagem",
         token=token,
         json={"recipient": {"id": recipient_igsid}, "message": {"text": text}},
+    )
+
+
+def send_button_template(token: str, recipient_igsid: str, text: str, buttons: list[dict]) -> dict:
+    """Template de botões: 1 a 3 botões (web_url ou postback), texto de até 640 caracteres."""
+    return _request(
+        "POST",
+        f"{GRAPH_HOST}/{_version()}/me/messages",
+        "enviar mensagem com botões",
+        token=token,
+        json={"recipient": {"id": recipient_igsid}, "message": {"attachment": {"type": "template", "payload": {
+            "template_type": "button", "text": text, "buttons": buttons}}}},
+    )
+
+
+def send_quick_replies(token: str, recipient_igsid: str, text: str, replies: list[dict]) -> dict:
+    """Respostas rápidas: até 13 opções de texto (título de até 20 caracteres)."""
+    return _request(
+        "POST",
+        f"{GRAPH_HOST}/{_version()}/me/messages",
+        "enviar respostas rápidas",
+        token=token,
+        json={"recipient": {"id": recipient_igsid}, "message": {"text": text, "quick_replies": replies}},
     )
 
 

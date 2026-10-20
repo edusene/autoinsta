@@ -2,7 +2,7 @@ from app.db import Jsonb
 
 LIST_COLUMNS = """
     e.id, e.workflow_id, w.name as workflow_name, e.contact_id, e.trigger_type, e.status,
-    e.error, e.steps_count, e.started_at, e.finished_at,
+    e.error, e.steps_count, e.started_at, e.finished_at, e.waiting_for, e.wait_until,
     extract(epoch from (coalesce(e.finished_at, now()) - e.started_at)) * 1000 as duration_ms
 """
 
@@ -48,17 +48,53 @@ def save_state(
     current_node_id: str | None,
     steps_count: int,
     error: str | None = None,
+    waiting_for: str | None = None,
+    wait_seconds: float | None = None,
 ) -> None:
     finished = status in ("success", "error", "cancelled")
     conn.execute(
         """
         update workflow_executions set status = %s, context = %s, current_node_id = %s,
             steps_count = %s, error = %s,
-            finished_at = case when %s then now() else null end
+            finished_at = case when %s then now() else null end,
+            waiting_for = %s,
+            wait_until = case when %s::float8 is null then null else now() + make_interval(secs => %s::float8) end
         where id = %s
         """,
-        (status, Jsonb(context), current_node_id, steps_count, error, finished, execution_id),
+        (status, Jsonb(context), current_node_id, steps_count, error, finished,
+         waiting_for if status == "waiting" else None, wait_seconds, wait_seconds, execution_id),
     )
+
+
+def claim_waiting(
+    conn, execution_id: str, kinds: list[str], node_id: str | None = None, steps: int | None = None,
+) -> dict | None:
+    """Passa a execução de 'waiting' para 'running' de forma atômica (só um retomador vence).
+
+    kinds: tipos de espera aceitos ("delay" inclui execuções antigas, sem waiting_for).
+    node_id/steps: confere que ainda é a mesma espera (um prazo antigo não retoma uma espera nova).
+    """
+    where = "id = %s and status = 'waiting' and coalesce(waiting_for, 'delay') = any(%s)"
+    params: list = [execution_id, kinds]
+    if node_id is not None:
+        where += " and current_node_id = %s"
+        params.append(node_id)
+    if steps is not None:
+        where += " and steps_count = %s"
+        params.append(steps)
+    return conn.execute(
+        f"""update workflow_executions set status = 'running', waiting_for = null, wait_until = null
+            where {where} returning *""",
+        params,
+    ).fetchone()
+
+
+def list_waiting_for_contact(conn, contact_id: str, waiting_for: str) -> list[dict]:
+    return conn.execute(
+        """select id, workflow_id, current_node_id, steps_count from workflow_executions
+           where contact_id = %s and status = 'waiting' and waiting_for = %s order by started_at""",
+        (contact_id, waiting_for),
+    ).fetchall()
 
 
 def add_log(

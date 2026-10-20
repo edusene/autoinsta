@@ -8,12 +8,19 @@ def list_for_user(conn, user_id: str) -> list[dict]:
         f"""
         select {', '.join('w.' + c.strip() for c in LIST_COLUMNS.split(','))},
                coalesce(e.total, 0) as executions_count,
-               coalesce(e.errors, 0) as errors_count
+               coalesce(e.errors, 0) as errors_count,
+               coalesce(m.trackable, 0) as trackable_count,
+               coalesce(m.clicked, 0) as clicked_count
         from workflows w
         left join lateral (
             select count(*) as total, count(*) filter (where status = 'error') as errors
             from workflow_executions where workflow_id = w.id
         ) e on true
+        left join lateral (
+            select count(*) filter (where trackable) as trackable,
+                   count(*) filter (where trackable and clicked_at is not null) as clicked
+            from messages where workflow_id = w.id and status = 'sent'
+        ) m on true
         where w.user_id = %s
         order by w.updated_at desc
         """,

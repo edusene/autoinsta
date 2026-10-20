@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ErrorAlert, ExecutionStatusBadge, Loading } from '../components/ui'
 import { AUTO_REFRESH_MS, useApi } from '../hooks/useApi'
-import { formatDuration, timeAgo } from '../lib/format'
+import { ctrPercent, formatDuration, timeAgo } from '../lib/format'
 import type { Dashboard, ExecutionSummary } from '../types'
 
 function ExecutionList({ items, empty }: { items: ExecutionSummary[]; empty: string }) {
@@ -87,6 +87,45 @@ export function DashboardPage() {
               <div className="small muted" style={{ marginTop: 4 }}>
                 {data.contacts_count} contato(s) no total
               </div>
+            </div>
+          </div>
+          <div className="grid grid-2">
+            <div className="card card-body stack" style={{ gap: 14 }}>
+              <div className="row">
+                <div>
+                  <div className="stat-label">CTR dos links e botões (7 dias)</div>
+                  <div className="stat-value">{ctrPercent(data.ctr_7d.trackable, data.ctr_7d.clicked)}</div>
+                </div>
+                <span className="spacer" />
+                <Link className="btn btn-sm" to="/inbox">
+                  ✉ Caixa de entrada{data.unread_conversations ? ` · ${data.unread_conversations} não lida(s)` : ''}
+                </Link>
+              </div>
+              <div className="ctr-bar" aria-hidden>
+                <div style={{ width: `${data.ctr_7d.trackable ? (data.ctr_7d.clicked / data.ctr_7d.trackable) * 100 : 0}%` }} />
+              </div>
+              <div className="small muted">
+                {data.ctr_7d.sent} DM(s) enviada(s) pela plataforma · {data.ctr_7d.trackable} com link rastreado ou botão ·{' '}
+                {data.ctr_7d.clicked} com clique
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-header"><h2>Links mais clicados (7 dias)</h2></div>
+              {!data.top_links.length ? (
+                <div className="empty small">Ative “Rastrear cliques nos links” nos blocos de mensagem para medir o CTR.</div>
+              ) : (
+                <div className="list">
+                  {data.top_links.map((l) => (
+                    <div key={l.url} className="list-item">
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.url}</div>
+                        <div className="small muted">{l.clicks} clique(s) · enviado {l.sent}x</div>
+                      </div>
+                      <strong>{ctrPercent(l.sent, l.clicked)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div className="grid grid-2">

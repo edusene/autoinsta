@@ -31,16 +31,26 @@ export interface WorkflowSummary {
   updated_at: string
   executions_count: number
   errors_count: number
+  /** Mensagens enviadas com link rastreado ou botão / quantas tiveram clique (CTR) */
+  trackable_count: number
+  clicked_count: number
 }
 
-export interface Workflow extends Omit<WorkflowSummary, 'executions_count' | 'errors_count'> {
+export interface Workflow extends Omit<WorkflowSummary, 'executions_count' | 'errors_count' | 'trackable_count' | 'clicked_count'> {
   graph: Graph
+}
+
+export interface FlowButton {
+  id: string
+  title: string
+  type: 'reply' | 'url'
+  url?: string
 }
 
 export interface FieldDef {
   name: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox'
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'buttons'
   required?: boolean
   default?: unknown
   help?: string
@@ -62,6 +72,15 @@ export interface NodeTypeDef {
   fields: FieldDef[]
   allowed_triggers?: string[]
   variables?: string[]
+  /** "buttons": cada botão de resposta vira uma saída do nó */
+  dynamic_outputs?: 'buttons'
+}
+
+/** Envios e cliques de um nó (CTR) */
+export interface NodeStats {
+  sent: number
+  trackable: number
+  clicked: number
 }
 
 export interface ValidationIssue {
@@ -141,19 +160,109 @@ export interface Paginated<T> {
   offset: number
 }
 
+export type ContactStatus = 'active' | 'blocked' | 'archived'
+
 export interface Contact {
   id: string
   ig_scoped_id: string
   username: string | null
   name: string | null
-  status: string
+  status: ContactStatus
+  tags: string[]
+  notes: string | null
+  automation_paused: boolean
   last_interaction_at: string | null
   last_event_type: string | null
+  last_inbound_at: string | null
+  unread_count: number
+  /** Dentro da janela de 24h da Meta (pode receber DM) */
+  can_message: boolean
   created_at: string
 }
 
 export interface ContactDetail extends Contact {
+  window_expires_at: string | null
   events: { id: string; event_type: string; summary: string | null; created_at: string }[]
+}
+
+export interface TagCount {
+  tag: string
+  count: number
+}
+
+export interface Conversation {
+  id: string
+  username: string | null
+  name: string | null
+  tags: string[]
+  status: ContactStatus
+  automation_paused: boolean
+  last_message_at: string
+  last_message_preview: string | null
+  unread_count: number
+  can_message: boolean
+}
+
+export interface InboxMessage {
+  id: string
+  direction: 'in' | 'out'
+  source: 'contact' | 'workflow' | 'inbox' | 'broadcast' | 'instagram_app'
+  kind: string
+  text: string | null
+  buttons: FlowButton[]
+  status: 'received' | 'sending' | 'sent' | 'failed'
+  error: string | null
+  workflow_id: string | null
+  broadcast_id: string | null
+  trackable: boolean
+  clicked_at: string | null
+  created_at: string
+}
+
+export interface ConversationDetail {
+  contact: ContactDetail
+  messages: InboxMessage[]
+}
+
+export interface CtrStats {
+  sent: number
+  trackable: number
+  clicked: number
+}
+
+export type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'done' | 'cancelled' | 'failed'
+
+export interface Broadcast {
+  id: string
+  name: string
+  text: string
+  buttons: FlowButton[]
+  audience: { tags?: string[] }
+  track_links: boolean
+  status: BroadcastStatus
+  scheduled_at: string | null
+  started_at: string | null
+  finished_at: string | null
+  last_error: string | null
+  created_at: string
+  total_count: number
+  sent_count: number
+  skipped_count: number
+  failed_count: number
+  pending_count: number
+  trackable_count: number
+  clicked_count: number
+}
+
+export interface BroadcastRecipient {
+  id: number
+  contact_id: string
+  username: string | null
+  name: string | null
+  status: 'pending' | 'processing' | 'sent' | 'skipped' | 'failed'
+  reason: string | null
+  processed_at: string | null
+  clicked_at: string | null
 }
 
 export interface Dashboard {
@@ -161,6 +270,9 @@ export interface Dashboard {
   workflows: { total: number; active: number }
   executions_24h: { total: number; success: number; errors: number; in_progress: number }
   contacts_count: number
+  ctr_7d: CtrStats
+  top_links: { url: string; sent: number; clicked: number; clicks: number }[]
+  unread_conversations: number
   recent_executions: ExecutionSummary[]
   recent_errors: ExecutionSummary[]
   openai_configured: boolean

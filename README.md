@@ -25,15 +25,21 @@ docs/         análise técnica e arquitetura
 
 - Cadastro, login e logout (Supabase Auth). Cada usuário só acessa os próprios dados.
 - **Conectar Instagram** com um clique (OAuth oficial). Reconectar, desconectar e uma tela de **diagnóstico** (configuração, token, permissões, webhook, eventos recebidos).
-- Webhooks `messages` e `comments`: assinatura HMAC validada, deduplicação, resposta imediata e processamento em background.
+- Webhooks `messages`, `comments`, `messaging_postbacks` (cliques em botões) e outros: assinatura HMAC validada, deduplicação, resposta imediata e processamento em background.
 - Editor visual com gatilhos (*Mensagem recebida*, *Comentário recebido*), condições (contém, igual, contém alguma palavra…) e ações (enviar DM, responder comentário em privado ou em público, esperar, IA, definir variável, finalizar).
 - Variáveis: `{{message.text}}`, `{{comment.text}}`, `{{contact.username}}`, `{{contact.name}}`, `{{ai.response}}`, `{{vars.nome}}`.
 - Ativar/desativar/duplicar/excluir workflows, com validação (gatilho único, campos obrigatórios, sem ciclos, regras da Meta).
 - Logs de execução passo a passo, contatos com histórico, dashboard e configurações.
+- **Caixa de entrada:** conversas por DM (inclusive as respondidas pelo app do Instagram), resposta manual dentro da janela de 24h e **pausa da automação** por contato (atendimento humano).
+- **Contatos:** tags, notas, status e filtro por tag; nós *Adicionar/Remover tag* e condição *Contato tem a tag?*.
+- **Disparos em massa:** mensagem (com até 3 botões de link) para um público por tags, na hora ou agendada, com relatório por destinatário. Quem está fora da janela de 24h é pulado.
+- **CTR:** links trocados por links rastreados (`/r/<código>`, configure `PUBLIC_URL`) e cliques em botões; CTR no dashboard, na lista de workflows, em cada bloco do editor e em cada disparo.
+- **Botões no workflow:** nó *Mensagem com botões* (template com até 3 botões ou até 13 respostas rápidas); cada botão de resposta vira um caminho no fluxo, mais o caminho *Sem clique*.
+- **Follow-up:** nó *Aguardar resposta*, com os caminhos *Respondeu* (`{{reply.text}}`) e *Sem resposta* (prazo de até 23h) para enviar um lembrete.
 
 ### Limitações da API oficial (que o produto respeita)
 
-- **Não é possível iniciar uma conversa.** DMs só podem ser enviadas até 24h depois da última mensagem do cliente. Por isso o delay máximo é de 23h.
+- **Não é possível iniciar uma conversa.** DMs só podem ser enviadas até 24h depois da última mensagem do cliente. Por isso o delay e as esperas têm no máximo 23h, e os disparos em massa só chegam a quem escreveu nas últimas 24h.
 - Para comentários, a alternativa oficial é a **resposta privada**: 1 por comentário, até 7 dias depois dele. O editor não deixa usar "Enviar DM" com o gatilho de comentário.
 - Webhooks de comentários exigem **Advanced Access**, app em modo **Live** e conta **pública**.
 - Só contas **profissionais** (Empresa/Criador). Mensagens de grupo não são suportadas.

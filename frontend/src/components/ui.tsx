@@ -94,6 +94,69 @@ export function ConfirmButton({
   )
 }
 
+const TAG_RE = /^[\p{L}\p{N}_\- ]{1,40}$/u
+
+/** Campo de tags: Enter ou vírgula adiciona; × remove. Tags ficam em minúsculas. */
+export function TagInput({
+  value,
+  onChange,
+  suggestions = [],
+  placeholder = 'Adicionar tag…',
+}: {
+  value: string[]
+  onChange: (tags: string[]) => void
+  suggestions?: string[]
+  placeholder?: string
+}) {
+  const [draft, setDraft] = useState('')
+  const listId = `tags-${suggestions.length}`
+  const add = (raw: string) => {
+    const tag = raw.trim().toLowerCase()
+    if (tag && TAG_RE.test(tag) && !value.includes(tag)) onChange([...value, tag])
+    setDraft('')
+  }
+  return (
+    <div className="tag-input">
+      {value.map((tag) => (
+        <span key={tag} className="tag">
+          {tag}
+          <button type="button" aria-label={`Remover ${tag}`} onClick={() => onChange(value.filter((t) => t !== tag))}>×</button>
+        </span>
+      ))}
+      <input
+        value={draft}
+        list={suggestions.length ? listId : undefined}
+        placeholder={value.length ? '' : placeholder}
+        maxLength={40}
+        onChange={(e) => (e.target.value.endsWith(',') ? add(e.target.value.slice(0, -1)) : setDraft(e.target.value))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            add(draft)
+          } else if (e.key === 'Backspace' && !draft && value.length) {
+            onChange(value.slice(0, -1))
+          }
+        }}
+        onBlur={() => draft && add(draft)}
+      />
+      {suggestions.length > 0 && (
+        <datalist id={listId}>
+          {suggestions.filter((s) => !value.includes(s)).map((s) => <option key={s} value={s} />)}
+        </datalist>
+      )}
+    </div>
+  )
+}
+
+export function Tags({ tags }: { tags: string[] }) {
+  if (!tags.length) return null
+  return (
+    <span className="tags">
+      {tags.map((t) => <span key={t} className="tag tag-sm">{t}</span>)}
+    </span>
+  )
+}
+
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="empty">

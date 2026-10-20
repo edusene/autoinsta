@@ -110,6 +110,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         node('segue', 'condition.follows', 260, 340, { on_unknown: 'false' }),
         node('link', 'action.send_message', 40, 520, {
           text: 'Obrigado por seguir, {{contact.username}}! 💜 Aqui está o link: https://seusite.com',
+          track_links: true,
         }),
         node('pedir', 'action.send_message', 480, 520, {
           text: 'Quase lá! Me segue aqui no Instagram e manda "EU QUERO" de novo que eu te envio o link 😉',
@@ -124,6 +125,68 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     },
   },
   {
+    id: 'buttons-menu',
+    name: 'Menu com botões',
+    description: 'Responde a DM com botões; cada escolha segue um caminho e quem pede atendimento recebe a tag "humano".',
+    graph: {
+      nodes: [
+        node('gatilho', 'trigger.message_received', 260, 20),
+        node('menu', 'action.send_buttons', 260, 170, {
+          text: 'Oi, {{contact.username}}! Como posso te ajudar? 👇',
+          style: 'buttons',
+          buttons: [
+            { id: 'precos', title: 'Ver preços', type: 'reply' },
+            { id: 'humano', title: 'Falar com humano', type: 'reply' },
+            { id: 'site', title: 'Abrir o site', type: 'url', url: 'https://seusite.com' },
+          ],
+          timeout_minutes: 60,
+          track_links: true,
+        }),
+        node('precos_msg', 'action.send_message', 620, 150, {
+          text: 'Nossa tabela completa está aqui: https://seusite.com/precos',
+          track_links: true,
+        }),
+        node('tag_humano', 'action.add_tag', 620, 330, { tag: 'humano' }),
+        node('humano_msg', 'action.send_message', 620, 480, {
+          text: 'Combinado! Alguém da equipe vai te responder por aqui em breve. 🙌',
+        }),
+      ],
+      edges: [
+        edge('gatilho', 'menu'),
+        edge('menu', 'precos_msg', 'precos'),
+        edge('menu', 'tag_humano', 'humano'),
+        edge('tag_humano', 'humano_msg'),
+      ],
+    },
+  },
+  {
+    id: 'follow-up',
+    name: 'Follow-up se não responder',
+    description: 'Faz uma pergunta e espera a resposta; se a pessoa não responder em 2h, envia um lembrete.',
+    graph: {
+      nodes: [
+        node('gatilho', 'trigger.message_received', 260, 20),
+        node('pergunta', 'action.send_message', 260, 170, {
+          text: 'Oi, {{contact.username}}! Qual produto te interessou? Me conta que eu te ajudo 😊',
+        }),
+        node('espera', 'action.wait_reply', 260, 330, { timeout_minutes: 120 }),
+        node('obrigado', 'action.send_message', 40, 500, {
+          text: 'Perfeito, anotei: "{{reply.text}}". Já te mando os detalhes!',
+        }),
+        node('lembrete', 'action.send_message', 480, 500, {
+          text: 'Oi de novo! Ainda posso te ajudar com alguma coisa? Nosso catálogo: https://seusite.com',
+          track_links: true,
+        }),
+      ],
+      edges: [
+        edge('gatilho', 'pergunta'),
+        edge('pergunta', 'espera'),
+        edge('espera', 'obrigado', 'replied'),
+        edge('espera', 'lembrete', 'timeout'),
+      ],
+    },
+  },
+  {
     id: 'welcome',
     name: 'Boas-vindas a novos contatos',
     description: 'Na 1ª mensagem de alguém, envia uma saudação com o link principal.',
@@ -132,6 +195,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         node('gatilho', 'trigger.new_contact', 80, 40),
         node('boas_vindas', 'action.send_message', 80, 200, {
           text: 'Oi, {{contact.username}}! Que bom ter você por aqui 💜 Confira nossos produtos: https://seusite.com',
+          track_links: true,
         }),
       ],
       edges: [edge('gatilho', 'boas_vindas')],
@@ -166,6 +230,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         }),
         node('dm', 'action.private_reply', 80, 360, {
           text: 'Oi, {{contact.username}}! Aqui está o link que você pediu: https://seusite.com 😉',
+          track_links: true,
         }),
         node('publico', 'action.reply_comment', 80, 520, { text: 'Te enviei no direct! 📩' }),
       ],

@@ -61,10 +61,10 @@ def create_app(config_class: type = Config, init_db: bool = True, web_process: b
     if init_db:
         db.init_pool(app.config["DATABASE_URL"], app.config["DB_POOL_MAX_SIZE"])
 
-    from app.routes import auth, frontend, health, instagram, panel, webhooks, workflows
+    from app.routes import auth, broadcasts, frontend, health, instagram, links, panel, webhooks, workflows
 
     # frontend por último: sua rota "catch-all" atende só o que as outras não atendem
-    for module in (auth, health, instagram, panel, webhooks, workflows, frontend):
+    for module in (auth, health, instagram, panel, broadcasts, links, webhooks, workflows, frontend):
         app.register_blueprint(module.bp)
 
     register_error_handlers(app)

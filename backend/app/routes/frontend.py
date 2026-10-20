@@ -14,7 +14,7 @@ from app.extensions import limiter
 
 bp = Blueprint("frontend", __name__)
 
-BACKEND_PREFIXES = ("api/", "webhooks/", "health")
+BACKEND_PREFIXES = ("api/", "webhooks/", "health", "r/")
 
 
 @bp.get("/api/public-config")

@@ -18,7 +18,7 @@ from migrate import apply_migrations
 TABLES = [
     "workflow_execution_logs", "workflow_executions", "contact_events", "contacts", "webhook_events",
     "oauth_tokens", "instagram_accounts", "workflows", "user_settings", "jobs", "profiles",
-    "webhook_rejections",
+    "webhook_rejections", "tracked_links", "messages", "broadcast_recipients", "broadcasts",
 ]
 
 
@@ -156,9 +156,16 @@ def meta_mock(monkeypatch):
             return [c for c in calls if c[0] == name]
 
     mock = Mock()
-    mock.set("send_text_message", {"recipient_id": "x", "message_id": "m_out_1"})
-    mock.set("send_private_reply", {"recipient_id": "x", "message_id": "m_out_2"})
+
+    def sent(*_args):
+        # A Meta devolve um message_id diferente a cada envio
+        return {"recipient_id": "x", "message_id": f"m_out_{len(calls)}"}
+
+    mock.set("send_text_message", sent)
+    mock.set("send_private_reply", sent)
     mock.set("reply_to_comment", {"id": "reply_1"})
+    mock.set("send_button_template", sent)
+    mock.set("send_quick_replies", sent)
     mock.set("get_user_profile", {"name": "Cliente Teste", "username": "cliente_teste"})
     mock.set("subscribe_webhooks", {"success": True})
     mock.set("get_subscribed_fields", lambda *a: list(meta_client.WEBHOOK_FIELDS))
