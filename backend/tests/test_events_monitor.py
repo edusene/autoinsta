@@ -2,6 +2,7 @@
 import json
 
 from app import db
+from app.services import webhook_service
 from tests.helpers import dm_graph_with_condition
 from tests.test_webhooks_and_engine import IG_ACCOUNT, create_active, dm_payload, drain_jobs, post_webhook
 
@@ -31,6 +32,17 @@ def test_rejected_signature_is_recorded_and_flagged_in_diagnostics(client, user,
     checks = {c["key"]: c for c in user.get("/api/instagram/diagnostics").get_json()["data"]["checks"]}
     assert checks["webhook_signature"]["status"] == "error"
     assert "META_WEBHOOK_EXTRA_SECRETS" in checks["webhook_signature"]["detail"]
+
+
+def test_rejection_flood_is_capped_but_still_refused(client):
+    body = json.dumps(dm_payload("spam")).encode()
+    for _ in range(webhook_service.MAX_REJECTIONS_PER_MINUTE + 10):
+        resp = client.post("/webhooks/meta", data=body, content_type="application/json",
+                           headers={"X-Hub-Signature-256": "sha256=errada"})
+        assert resp.status_code == 403
+    with db.connection() as conn:
+        stored = conn.execute("select count(*) as n from webhook_rejections").fetchone()["n"]
+    assert stored == webhook_service.MAX_REJECTIONS_PER_MINUTE
 
 
 def test_rejections_of_other_accounts_are_hidden(client, user, other_user, connected_account):

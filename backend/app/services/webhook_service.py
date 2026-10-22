@@ -9,7 +9,10 @@ import hashlib
 import hmac
 import json
 import logging
+import threading
+import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -61,9 +64,27 @@ def verify_signature(raw_body: bytes, header_value: str | None) -> bool:
 # Tentativas recusadas: gravamos só metadados (nunca o corpo), para diagnóstico.
 # Sobrevivem a reinícios do servidor; a tabela guarda apenas as mais recentes.
 MAX_STORED_REJECTIONS = 500
+# A rota é pública: limita as gravações por processo para que requisições falsas em massa
+# não virem carga no banco (as recusas continuam respondendo 403 normalmente).
+MAX_REJECTIONS_PER_MINUTE = 30
+_rejection_times: deque[float] = deque()
+_rejection_lock = threading.Lock()
+
+
+def _rejection_allowed() -> bool:
+    now = time.monotonic()
+    with _rejection_lock:
+        while _rejection_times and now - _rejection_times[0] > 60:
+            _rejection_times.popleft()
+        if len(_rejection_times) >= MAX_REJECTIONS_PER_MINUTE:
+            return False
+        _rejection_times.append(now)
+        return True
 
 
 def record_rejection(raw_body: bytes, reason: str, has_signature: bool) -> None:
+    if not _rejection_allowed():
+        return
     accounts, fields = set(), set()
     try:
         payload = json.loads(raw_body)

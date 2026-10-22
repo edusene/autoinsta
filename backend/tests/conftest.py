@@ -13,6 +13,7 @@ import pytest
 
 from app import create_app, db
 from app.config import TestConfig
+from app.services import webhook_service
 from migrate import apply_migrations
 
 TABLES = [
@@ -49,6 +50,7 @@ def app():
 def clean_db(app):
     with db.connection() as conn:
         conn.execute(f"truncate {', '.join(TABLES)}, auth.users restart identity cascade")
+    webhook_service._rejection_times.clear()
     yield
 
 
