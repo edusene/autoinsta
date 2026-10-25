@@ -104,6 +104,8 @@ def build_authorize_url(state: str) -> str:
         "response_type": "code",
         "scope": ",".join(REQUIRED_SCOPES),
         "state": state,
+        # Login pedido dentro do fluxo OAuth: sem isso o Instagram pode parar no feed após o login
+        "force_reauth": "true",
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
