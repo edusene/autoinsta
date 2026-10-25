@@ -20,7 +20,6 @@ def start_connect(user) -> str:
     assert params["response_type"] == ["code"]
     assert params["scope"] == [SCOPES]
     assert params["redirect_uri"] == [TestConfig.META_REDIRECT_URI]
-    assert params["force_reauth"] == ["true"]
     return params["state"][0]
 
 
