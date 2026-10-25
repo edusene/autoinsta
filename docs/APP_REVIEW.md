@@ -196,6 +196,7 @@ Motivo da recusa: *"o screencast não demonstra a experiência completa do caso 
 - Instagram da empresa e do cliente em **inglês** (Configurações → Idioma → English). A tela de permissões e o app do cliente aparecem em inglês.
 - Painel do AutoInsta em inglês: na janela anônima, clique com o botão direito → **Traduzir para inglês** (Chrome). Mantenha os nomes originais nas legendas entre parênteses.
 - Apague workflows de comentário antigos e **desconecte** o Instagram no AutoInsta.
+- **Remova o app no Instagram** (app do Instagram → Configurações → Permissões do site → Apps e sites → Ativos → *eduauto - IG* → Remover). Sem isso, a tela mostra só "You previously connected", sem a lista de permissões.
 - Abra `https://autoinsta-3wyp.onrender.com/health` 1 minuto antes para acordar o servidor.
 - Deixe pronto um **post público** do @sene.ia e a conta do cliente aberta no celular (espelhado na tela) ou em outra janela.
 - Não digite a senha do Instagram na legenda nem dê zoom nela.
@@ -207,8 +208,8 @@ Motivo da recusa: *"o screencast não demonstra a experiência completa do caso 
 | 1 | Título por 3 s | *"AutoInsta – instagram_business_manage_comments: automatic public reply and private reply to comments on the business's own posts."* |
 | 2 | Abrir `https://autoinsta-3wyp.onrender.com/login` e entrar | *"The business owner logs in to AutoInsta (our app)."* |
 | 3 | Menu **Instagram**: mostrar "não conectado" | *"No Instagram account is connected yet."* |
-| 4 | Passar o mouse e clicar em **Conectar Instagram** | *"'Connect Instagram' starts Business Login for Instagram (Meta login)."* |
-| 5 | Tela oficial do Instagram: digitar **usuário e senha** do @sene.ia e entrar (fazer 2FA se pedir) | *"The owner logs in with Instagram – full Meta login flow."* |
+| 4 | Nova aba: abrir `instagram.com`, digitar **usuário e senha** do @sene.ia e entrar (2FA se pedir). Voltar à aba do AutoInsta | *"The owner logs in to Instagram – Meta login flow."* |
+| 5 | Passar o mouse e clicar em **Conectar Instagram** | *"'Connect Instagram' starts Business Login for Instagram."* |
 | 6 | Tela de permissões: deixar **3 s parado** e passar o mouse em **"Manage comments"** | *"Instagram lists the permissions requested, including managing comments."* |
 | 7 | Clicar em **Allow** | *"The owner grants AutoInsta access to the permissions."* |
 | 8 | Volta ao AutoInsta: foto, @sene.ia e **Conectado** | *"The business account is connected."* |
