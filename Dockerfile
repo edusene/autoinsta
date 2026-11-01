@@ -10,7 +10,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---- 2) API ------------------------------------------------------------------
-FROM python:3.13-slim
+FROM python:3.15-slim
 # APP_ENV=production por padrão (debug desligado, HSTS, checagem da SECRET_KEY);
 # a variável do serviço no Render/VPS continua tendo prioridade.
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 APP_ENV=production
