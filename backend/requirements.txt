@@ -8,4 +8,4 @@ requests==2.34.2
 openai==3.26.1
 pydantic==2.14.0
 python-dotenv==1.2.4
-gunicorn==26.2.0
+gunicorn==27.0.1
